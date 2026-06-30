@@ -113,6 +113,9 @@ func (w *Worker) poll(ctx context.Context) error {
 		lastHash = l.BlockHash
 	}
 
+	// ponytail: LastProcessedHash = the last log's block hash (empty if the range had no logs),
+	// not necessarily block `to`'s canonical hash. It is stored but unused in BE-1; Phase 4 reorg
+	// reconcile must fetch the canonical hash of `to` (HeaderByNumber) before trusting it.
 	newState := domain.IndexerState{
 		ChainID:            w.cfg.ChainID,
 		LastProcessedBlock: to,
@@ -139,12 +142,4 @@ func (w *Worker) processLog(ctx context.Context, l domain.IssuedLog) error {
 		return fmt.Errorf("upsert %s: %w", l.TokenID, err)
 	}
 	return nil
-}
-
-// min returns the smaller of a and b (Go 1.21+ builtin, kept explicit for clarity).
-func min(a, b uint64) uint64 {
-	if a < b {
-		return a
-	}
-	return b
 }
