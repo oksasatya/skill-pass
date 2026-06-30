@@ -6,9 +6,9 @@ import (
 )
 
 const (
-	hexPrefix    = "0x"
-	addrHexLen   = 40 // 20 bytes * 2 hex chars
-	zeroAddrHex  = "0x0000000000000000000000000000000000000000"
+	hexPrefix   = "0x"
+	addrHexLen  = 40 // 20 bytes * 2 hex chars
+	zeroAddrHex = "0x0000000000000000000000000000000000000000"
 )
 
 // Address is a normalized EVM address value object (always lowercase 0x…).
