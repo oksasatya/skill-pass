@@ -190,8 +190,8 @@ export function CertificateDetail({ certificate, className }: CertificateDetailP
       {/* ── Certificate document ──────────────────────────────────────────── */}
       <div className="rounded-xl border border-border bg-surface p-6 md:p-8 space-y-6">
 
-        {/* Eyebrow */}
-        <p className="font-sans text-xs font-medium text-ink-muted uppercase tracking-widest">
+        {/* Document label — not an eyebrow kicker, just a quiet context line */}
+        <p className="font-sans text-xs font-medium text-ink-muted">
           Certificate of Achievement
         </p>
 

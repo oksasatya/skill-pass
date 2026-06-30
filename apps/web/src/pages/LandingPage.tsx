@@ -37,7 +37,7 @@ export default function LandingPage() {
 
       {/* ── Minimal landing nav ──────────────────────────────────────────── */}
       <header className="sticky top-0 z-10 border-b border-border bg-bg/90 backdrop-blur-sm">
-        <div className="mx-auto max-w-[72rem] px-4 md:px-6 flex h-14 items-center justify-between gap-4">
+        <div className="mx-auto max-w-[72rem] px-4 md:px-6 lg:px-8 flex h-14 items-center justify-between gap-4">
           {/* Logo mark + wordmark */}
           <Link
             to="/"
@@ -73,7 +73,7 @@ export default function LandingPage() {
         {/* ── Hero ──────────────────────────────────────────────────────── */}
         <section
           aria-label="Introduction"
-          className="mx-auto max-w-[72rem] px-4 md:px-6 pt-16 pb-20 md:pt-24 md:pb-28 grid md:grid-cols-2 gap-12 md:gap-16 items-center"
+          className="mx-auto max-w-[72rem] px-4 md:px-6 lg:px-8 pt-16 pb-20 md:pt-24 md:pb-28 grid md:grid-cols-2 gap-10 md:gap-16 items-center"
         >
           {/* Left: headline + CTA */}
           <div className="flex flex-col gap-6">
@@ -168,7 +168,7 @@ export default function LandingPage() {
           aria-label="How SkillPass works"
           className="border-t border-border bg-surface"
         >
-          <div className="mx-auto max-w-[72rem] px-4 md:px-6 py-16 md:py-20">
+          <div className="mx-auto max-w-[72rem] px-4 md:px-6 lg:px-8 py-16 md:py-20">
             <h2 className="font-sans text-2xl font-semibold text-ink mb-12">
               How it works
             </h2>
@@ -218,7 +218,7 @@ export default function LandingPage() {
         {/* ── Who it's for ──────────────────────────────────────────────── */}
         <section
           aria-label="Who SkillPass is for"
-          className="mx-auto max-w-[72rem] px-4 md:px-6 py-16 md:py-20"
+          className="mx-auto max-w-[72rem] px-4 md:px-6 lg:px-8 py-16 md:py-20"
         >
           <h2 className="font-sans text-2xl font-semibold text-ink mb-10">
             Built for three roles, one credential
@@ -246,7 +246,7 @@ export default function LandingPage() {
           aria-label="Get started"
           className="border-t border-border bg-surface"
         >
-          <div className="mx-auto max-w-[72rem] px-4 md:px-6 py-14 md:py-16 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+          <div className="mx-auto max-w-[72rem] px-4 md:px-6 lg:px-8 py-14 md:py-16 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
             <div className="flex flex-col gap-1">
               <p className="font-sans text-xl font-semibold text-ink">
                 Ready to issue your first certificate?
@@ -267,7 +267,7 @@ export default function LandingPage() {
 
       {/* ── Footer ──────────────────────────────────────────────────────── */}
       <footer className="border-t border-border mt-auto">
-        <div className="mx-auto max-w-[72rem] px-4 md:px-6 py-6 flex flex-wrap items-center justify-between gap-4">
+        <div className="mx-auto max-w-[72rem] px-4 md:px-6 lg:px-8 py-6 flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <span className="size-4 rounded-[2px] bg-primary shrink-0" aria-hidden="true" />
             <span className="font-sans text-sm font-medium text-ink">SkillPass</span>

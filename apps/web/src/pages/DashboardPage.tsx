@@ -167,9 +167,7 @@ export default function DashboardPage() {
 
           {/* Quick links */}
           <div className="space-y-2 pt-2">
-            <p className="text-xs font-medium text-ink-muted uppercase tracking-widest">
-              Quick links
-            </p>
+            <p className="text-xs font-medium text-ink-muted">Quick links</p>
             <div className="space-y-2">
               <QuickLink
                 to="/app/my-certificates"

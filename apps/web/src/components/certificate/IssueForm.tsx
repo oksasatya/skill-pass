@@ -191,7 +191,7 @@ export function IssueForm({ issuer }: IssueFormProps) {
         <dl className="space-y-3 text-sm">
           {tokenIdStr && (
             <div>
-              <dt className="text-xs text-ink-muted uppercase tracking-wide">Token ID</dt>
+              <dt className="text-xs text-ink-muted">Token ID</dt>
               <dd className="flex items-center gap-2 mt-0.5">
                 <span className="font-mono text-ink">{tokenIdStr}</span>
                 <CopyButton value={tokenIdStr} />
@@ -199,7 +199,7 @@ export function IssueForm({ issuer }: IssueFormProps) {
             </div>
           )}
           <div>
-            <dt className="text-xs text-ink-muted uppercase tracking-wide">Transaction hash</dt>
+            <dt className="text-xs text-ink-muted">Transaction hash</dt>
             <dd className="flex items-center gap-2 mt-0.5 min-w-0">
               <span className="font-mono text-xs text-ink break-all">{txHash}</span>
               <CopyButton value={txHash} />
