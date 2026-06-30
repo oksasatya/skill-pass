@@ -1,0 +1,7 @@
+out/
+cache/
+broadcast/
+.env
+
+# Dependencies are installed via `make install` (not vendored into git)
+lib/
