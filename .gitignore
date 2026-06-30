@@ -1,0 +1,22 @@
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+.impeccable/
+
+# Node
+node_modules/
+dist/
+
+# Foundry
+contracts/out/
+contracts/cache/
+contracts/broadcast/
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Go (later phases)
+/services/**/bin/
