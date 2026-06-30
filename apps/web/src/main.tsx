@@ -5,6 +5,7 @@ import { WagmiProvider } from 'wagmi'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { config } from '@/lib/wagmi'
 import { AppShell } from '@/components/layout/AppShell'
+import { ConnectButton } from '@/components/wallet/ConnectButton'
 
 import LandingPage from '@/pages/LandingPage'
 import DashboardPage from '@/pages/DashboardPage'
@@ -32,7 +33,7 @@ const router = createBrowserRouter([
   },
   {
     // AppShell wraps all /app/* routes via Outlet
-    element: <AppShell />,
+    element: <AppShell walletSlot={<ConnectButton />} />,
     children: [
       { path: '/app', element: <DashboardPage /> },
       { path: '/app/issue', element: <IssuePage /> },
