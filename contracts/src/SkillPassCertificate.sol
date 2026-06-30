@@ -16,6 +16,14 @@ contract SkillPassCertificate is ERC721, Ownable {
         uint256 issuedAt;
     }
 
+    error ZeroRecipient();
+    error StringTooLong();
+
+    uint256 private constant MAX_TITLE = 200;
+    uint256 private constant MAX_NAME = 100;
+    uint256 private constant MAX_DESC = 1000;
+    uint256 private constant MAX_URI = 300;
+
     event CertificateIssued(
         uint256 indexed tokenId,
         address indexed recipient,
@@ -40,6 +48,12 @@ contract SkillPassCertificate is ERC721, Ownable {
         string calldata description,
         string calldata metadataURI
     ) external onlyOwner returns (uint256 tokenId) {
+        if (recipient == address(0)) revert ZeroRecipient();
+        if (bytes(title).length > MAX_TITLE) revert StringTooLong();
+        if (bytes(recipientName).length > MAX_NAME) revert StringTooLong();
+        if (bytes(issuerName).length > MAX_NAME) revert StringTooLong();
+        if (bytes(description).length > MAX_DESC) revert StringTooLong();
+        if (bytes(metadataURI).length > MAX_URI) revert StringTooLong();
         tokenId = _nextTokenId++;
         _certificates[tokenId] = Certificate({
             title: title,

@@ -48,4 +48,17 @@ contract SkillPassCertificateTest is Test {
         vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, attacker));
         cert.issueCertificate(recipient, "X", "Y", "Z", "D", "ipfs://x");
     }
+
+    function test_IssueCertificate_RevertWhen_ZeroRecipient() public {
+        vm.prank(owner);
+        vm.expectRevert(SkillPassCertificate.ZeroRecipient.selector);
+        cert.issueCertificate(address(0), "X", "Y", "Z", "D", "ipfs://x");
+    }
+
+    function test_IssueCertificate_RevertWhen_TitleTooLong() public {
+        string memory longTitle = string(new bytes(201)); // 201 bytes > MAX_TITLE (200)
+        vm.prank(owner);
+        vm.expectRevert(SkillPassCertificate.StringTooLong.selector);
+        cert.issueCertificate(recipient, longTitle, "Y", "Z", "D", "ipfs://x");
+    }
 }
