@@ -27,20 +27,15 @@ contract SkillPassCertificate is ERC721, Ownable {
     uint256 private constant MAX_URI = 300;
 
     event CertificateIssued(
-        uint256 indexed tokenId,
-        address indexed recipient,
-        string title,
-        string issuerName,
-        uint256 issuedAt
+        uint256 indexed tokenId, address indexed recipient, string title, string issuerName, uint256 issuedAt
     );
+
+    event Locked(uint256 tokenId); // ERC-5192
 
     uint256 private _nextTokenId = 1;
     mapping(uint256 tokenId => Certificate) private _certificates;
 
-    constructor(address initialOwner)
-        ERC721("SkillPass Certificate", "SKILL")
-        Ownable(initialOwner)
-    {}
+    constructor(address initialOwner) ERC721("SkillPass Certificate", "SKILL") Ownable(initialOwner) {}
 
     function issueCertificate(
         address recipient,
@@ -66,15 +61,12 @@ contract SkillPassCertificate is ERC721, Ownable {
             issuedAt: block.timestamp
         });
         emit CertificateIssued(tokenId, recipient, title, issuerName, block.timestamp);
+        emit Locked(tokenId);
         _safeMint(recipient, tokenId);
     }
 
     /// @dev Block transfers; allow mint (from == 0) and burn (to == 0).
-    function _update(address to, uint256 tokenId, address auth)
-        internal
-        override
-        returns (address)
-    {
+    function _update(address to, uint256 tokenId, address auth) internal override returns (address) {
         address from = _ownerOf(tokenId);
         if (from != address(0) && to != address(0)) revert Soulbound();
         return super._update(to, tokenId, auth);
@@ -88,16 +80,26 @@ contract SkillPassCertificate is ERC721, Ownable {
         revert ApprovalDisabled();
     }
 
-    function getCertificate(uint256 tokenId)
-        external
-        view
-        returns (Certificate memory cert, address recipient)
-    {
+    function getCertificate(uint256 tokenId) external view returns (Certificate memory cert, address recipient) {
         _requireOwned(tokenId);
         return (_certificates[tokenId], _ownerOf(tokenId));
     }
 
     function totalSupply() external view returns (uint256) {
         return _nextTokenId - 1;
+    }
+
+    function locked(uint256 tokenId) external view returns (bool) {
+        _requireOwned(tokenId);
+        return true;
+    }
+
+    function tokenURI(uint256 tokenId) public view override returns (string memory) {
+        _requireOwned(tokenId);
+        return _certificates[tokenId].metadataURI;
+    }
+
+    function supportsInterface(bytes4 interfaceId) public view override returns (bool) {
+        return interfaceId == 0xb45a3c0e || super.supportsInterface(interfaceId);
     }
 }

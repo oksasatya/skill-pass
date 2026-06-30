@@ -37,9 +37,13 @@ contract SkillPassCertificateTest is Test {
 
     function test_IssueCertificate_EmitsEvent() public {
         vm.expectEmit(true, true, false, true);
-        emit SkillPassCertificate.CertificateIssued(1, recipient, "Full Stack Web3", "SkillPass Academy", block.timestamp);
+        emit SkillPassCertificate.CertificateIssued(
+            1, recipient, "Full Stack Web3", "SkillPass Academy", block.timestamp
+        );
         vm.prank(owner);
-        cert.issueCertificate(recipient, "Full Stack Web3", "Oksa Satya", "SkillPass Academy", "Completed program", "ipfs://abc");
+        cert.issueCertificate(
+            recipient, "Full Stack Web3", "Oksa Satya", "SkillPass Academy", "Completed program", "ipfs://abc"
+        );
     }
 
     function test_IssueCertificate_RevertWhen_NotOwner() public {
@@ -102,5 +106,29 @@ contract SkillPassCertificateTest is Test {
         vm.prank(recipient);
         vm.expectRevert(SkillPassCertificate.ApprovalDisabled.selector);
         cert.setApprovalForAll(address(0xCAFE), true);
+    }
+
+    function test_Locked_ReturnsTrue() public {
+        vm.prank(owner);
+        uint256 tokenId = cert.issueCertificate(recipient, "X", "Y", "Z", "D", "ipfs://x");
+        assertTrue(cert.locked(tokenId));
+    }
+
+    function test_SupportsInterface_ERC5192() public view {
+        assertTrue(cert.supportsInterface(0xb45a3c0e)); // ERC-5192
+        assertTrue(cert.supportsInterface(0x80ac58cd)); // ERC-721
+    }
+
+    function test_TokenURI_ReturnsStoredURI() public {
+        vm.prank(owner);
+        uint256 tokenId = cert.issueCertificate(recipient, "X", "Y", "Z", "D", "ipfs://meta");
+        assertEq(cert.tokenURI(tokenId), "ipfs://meta");
+    }
+
+    function test_EmitsLockedOnMint() public {
+        vm.expectEmit(false, false, false, true);
+        emit SkillPassCertificate.Locked(1);
+        vm.prank(owner);
+        cert.issueCertificate(recipient, "X", "Y", "Z", "D", "ipfs://x");
     }
 }
