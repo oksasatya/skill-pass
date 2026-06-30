@@ -1,0 +1,62 @@
+syntax = "proto3";
+
+package skillpass.cert.v1;
+
+option go_package = "github.com/oksasatya/skillpass/proto/gen/go/skillpass/cert/v1;certv1";
+
+import "google/protobuf/timestamp.proto";
+
+// CertificateQuery is the read-side gRPC API the gateway calls. Use-case shaped:
+// messages model what the UI needs, not the SQL table.
+service CertificateQuery {
+  rpc GetCertificate(GetCertificateRequest) returns (GetCertificateResponse);
+  rpc ListCertificates(ListCertificatesRequest) returns (ListCertificatesResponse);
+  rpc StreamCertificateEvents(StreamCertificateEventsRequest) returns (stream CertificateEvent);
+  rpc GetIndexerStatus(GetIndexerStatusRequest) returns (GetIndexerStatusResponse);
+}
+
+// Certificate is the read DTO. token_id is a STRING because Solidity uint256 does not fit int64.
+message Certificate {
+  string token_id = 1;
+  string owner_address = 2;
+  string title = 3;
+  string recipient_name = 4;
+  string issuer_name = 5;
+  string description = 6;
+  string metadata_uri = 7;
+  google.protobuf.Timestamp issued_at = 8;
+  string tx_hash = 9;
+  uint64 block_number = 10;
+}
+
+message GetCertificateRequest { string token_id = 1; }
+message GetCertificateResponse { Certificate certificate = 1; }
+
+message ListCertificatesRequest {
+  string owner_address = 1; // optional filter (empty = all)
+  string query = 2;         // optional text search over title/issuer/recipient (empty = none)
+  string cursor = 3;        // opaque pagination cursor (empty = first page)
+  int32 page_size = 4;      // 0 = server default
+}
+message ListCertificatesResponse {
+  repeated Certificate certificates = 1;
+  string next_cursor = 2;
+  bool has_more = 3;
+}
+
+message StreamCertificateEventsRequest {
+  string owner_address = 1; // optional: only events for this owner (empty = all)
+}
+message CertificateEvent {
+  string event_type = 1; // "issued"
+  Certificate certificate = 2;
+}
+
+message GetIndexerStatusRequest {}
+message GetIndexerStatusResponse {
+  uint64 last_processed_block = 1;
+  uint64 chain_head_block = 2;
+  uint64 index_lag = 3; // chain_head - last_processed
+  bool healthy = 4;
+  uint64 total_certificates = 5;
+}

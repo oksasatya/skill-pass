@@ -1,0 +1,16 @@
+version: v2
+
+modules:
+  - path: proto
+
+lint:
+  use:
+    - STANDARD
+  except:
+    - PACKAGE_VERSION_SUFFIX
+    - SERVICE_SUFFIX          # CertificateQuery is intentionally use-case shaped, not a generic "Service"
+    - RPC_RESPONSE_STANDARD_NAME # CertificateEvent is an event DTO, not a response wrapper
+
+breaking:
+  use:
+    - FILE
