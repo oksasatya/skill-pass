@@ -61,4 +61,46 @@ contract SkillPassCertificateTest is Test {
         vm.expectRevert(SkillPassCertificate.StringTooLong.selector);
         cert.issueCertificate(recipient, longTitle, "Y", "Z", "D", "ipfs://x");
     }
+
+    function test_Transfer_RevertWhen_Soulbound() public {
+        vm.prank(owner);
+        uint256 tokenId = cert.issueCertificate(recipient, "X", "Y", "Z", "D", "ipfs://x");
+
+        vm.prank(recipient);
+        vm.expectRevert(SkillPassCertificate.Soulbound.selector);
+        cert.transferFrom(recipient, address(0xCAFE), tokenId);
+    }
+
+    function test_SafeTransfer_RevertWhen_Soulbound() public {
+        vm.prank(owner);
+        uint256 tokenId = cert.issueCertificate(recipient, "X", "Y", "Z", "D", "ipfs://x");
+
+        vm.prank(recipient);
+        vm.expectRevert(SkillPassCertificate.Soulbound.selector);
+        cert.safeTransferFrom(recipient, address(0xCAFE), tokenId);
+    }
+
+    function test_SafeTransferWithData_RevertWhen_Soulbound() public {
+        vm.prank(owner);
+        uint256 tokenId = cert.issueCertificate(recipient, "X", "Y", "Z", "D", "ipfs://x");
+
+        vm.prank(recipient);
+        vm.expectRevert(SkillPassCertificate.Soulbound.selector);
+        cert.safeTransferFrom(recipient, address(0xCAFE), tokenId, "");
+    }
+
+    function test_Approve_RevertWhen_Disabled() public {
+        vm.prank(owner);
+        uint256 tokenId = cert.issueCertificate(recipient, "X", "Y", "Z", "D", "ipfs://x");
+
+        vm.prank(recipient);
+        vm.expectRevert(SkillPassCertificate.ApprovalDisabled.selector);
+        cert.approve(address(0xCAFE), tokenId);
+    }
+
+    function test_SetApprovalForAll_RevertWhen_Disabled() public {
+        vm.prank(recipient);
+        vm.expectRevert(SkillPassCertificate.ApprovalDisabled.selector);
+        cert.setApprovalForAll(address(0xCAFE), true);
+    }
 }

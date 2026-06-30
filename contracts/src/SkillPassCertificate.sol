@@ -18,6 +18,8 @@ contract SkillPassCertificate is ERC721, Ownable {
 
     error ZeroRecipient();
     error StringTooLong();
+    error Soulbound();
+    error ApprovalDisabled();
 
     uint256 private constant MAX_TITLE = 200;
     uint256 private constant MAX_NAME = 100;
@@ -65,6 +67,25 @@ contract SkillPassCertificate is ERC721, Ownable {
         });
         emit CertificateIssued(tokenId, recipient, title, issuerName, block.timestamp);
         _safeMint(recipient, tokenId);
+    }
+
+    /// @dev Block transfers; allow mint (from == 0) and burn (to == 0).
+    function _update(address to, uint256 tokenId, address auth)
+        internal
+        override
+        returns (address)
+    {
+        address from = _ownerOf(tokenId);
+        if (from != address(0) && to != address(0)) revert Soulbound();
+        return super._update(to, tokenId, auth);
+    }
+
+    function approve(address, uint256) public pure override {
+        revert ApprovalDisabled();
+    }
+
+    function setApprovalForAll(address, bool) public pure override {
+        revert ApprovalDisabled();
     }
 
     function getCertificate(uint256 tokenId)
