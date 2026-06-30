@@ -16,15 +16,18 @@ import type { CertificateView } from '@/hooks/useCertificates'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+// ponytail: hoisted — Intl.DateTimeFormat construction is expensive; build once at module load
+const dateFormatter = new Intl.DateTimeFormat('en-US', {
+  year: 'numeric',
+  month: 'short',
+  day: 'numeric',
+})
+
 function formatIssuedDate(issuedAt: bigint): string {
   const ms = Number(issuedAt) * 1000
   // issuedAt = 0 means unknown (fallback from mapMulticallResult)
   if (ms === 0) return '—'
-  return new Intl.DateTimeFormat('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  }).format(new Date(ms))
+  return dateFormatter.format(new Date(ms))
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────

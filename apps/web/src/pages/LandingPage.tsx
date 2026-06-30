@@ -227,15 +227,15 @@ export default function LandingPage() {
           {/* Prose description list — not identical cards */}
           <dl className="divide-y divide-border">
             <AudienceItem
-              role="Issuers"
+              heading="Issuers"
               description="Bootcamps, course creators, developer communities, and open-source maintainers. You ran a program and want to hand participants a tamper-proof credential that outlasts any platform. Connect a wallet, fill out a form, mint. That's it."
             />
             <AudienceItem
-              role="Recipients"
+              heading="Recipients"
               description="Participants, contributors, attendees. Connect your wallet to see every credential you have earned, with full issuer details and the on-chain record behind each one. Share a link — the proof travels with it."
             />
             <AudienceItem
-              role="Verifiers"
+              heading="Verifiers"
               description="Recruiters, peers, community members. You received a link. No account required. Open it, read the certificate, and follow the block explorer link to confirm the credential is real and belongs to who it claims."
             />
           </dl>
@@ -327,15 +327,15 @@ function StepConnector({ step: _step, last = false }: { readonly step: number; r
  * Deliberately NOT a card — prose layout is the differentiator.
  */
 function AudienceItem({
-  role,
+  heading,
   description,
 }: {
-  readonly role: string
+  readonly heading: string
   readonly description: string
 }) {
   return (
     <div className="grid md:grid-cols-[10rem_1fr] gap-2 md:gap-8 py-6">
-      <dt className="font-sans text-sm font-semibold text-ink pt-0.5">{role}</dt>
+      <dt className="font-sans text-sm font-semibold text-ink pt-0.5">{heading}</dt>
       <dd className="font-sans text-sm text-ink-muted leading-relaxed">{description}</dd>
     </div>
   )

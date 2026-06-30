@@ -8,7 +8,7 @@
  * Exposed: { issue, status, tokenId, txHash, error, reset }
  */
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback } from 'react'
 import { useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
 import { parseEventLogs } from 'viem'
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from '@/lib/contract'
@@ -33,15 +33,17 @@ export function useIssueCertificate(): UseIssueCertificateResult {
 
   const { writeContractAsync } = useWriteContract()
 
+  // waitForTransactionReceipt — enabled only while confirming
   const { data: receipt } = useWaitForTransactionReceipt({
     hash: txHash,
     query: { enabled: !!txHash && status === 'confirming' },
   })
 
-  // When receipt arrives, parse the CertificateIssued log and transition to success
-  useEffect(() => {
-    if (!receipt || status !== 'confirming') return
-
+  // Derive tokenId from receipt when it arrives — no effect needed, just read during render.
+  // ponytail: this replaces the useEffect that copied receipt data into state (react-doctor: no-derived-state + no-event-handler)
+  const resolvedTokenId: bigint | undefined = (() => {
+    if (tokenId !== undefined) return tokenId
+    if (!receipt || status !== 'confirming') return undefined
     try {
       const logs = parseEventLogs({
         abi: CONTRACT_ABI,
@@ -50,19 +52,19 @@ export function useIssueCertificate(): UseIssueCertificateResult {
       })
       const issuedLog = logs[0]
       if (issuedLog) {
-        // parseEventLogs with untyped JSON ABI gives args as unknown — narrow manually
         const rawArgs = (issuedLog as unknown as { args: Record<string, unknown> }).args
-        const rawTokenId = rawArgs?.['tokenId']
-        if (typeof rawTokenId === 'bigint') {
-          setTokenId(rawTokenId)
-        }
+        const raw = rawArgs?.['tokenId']
+        if (typeof raw === 'bigint') return raw
       }
     } catch {
       // Log parse failure is non-fatal; tokenId stays undefined but tx succeeded
     }
+    return undefined
+  })()
 
-    setStatus('success')
-  }, [receipt, status])
+  // Transition to success once receipt lands (only needs a state update for status)
+  const resolvedStatus: IssueStatus =
+    receipt && status === 'confirming' ? 'success' : status
 
   const issue = useCallback(
     (fields: CertificateFields) => {
@@ -109,5 +111,12 @@ export function useIssueCertificate(): UseIssueCertificateResult {
     setIssueError(null)
   }, [])
 
-  return { issue, status, tokenId, txHash, error: issueError, reset }
+  return {
+    issue,
+    status: resolvedStatus,
+    tokenId: resolvedTokenId,
+    txHash,
+    error: issueError,
+    reset,
+  }
 }

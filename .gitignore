@@ -20,3 +20,5 @@ contracts/broadcast/
 
 # Go (later phases)
 /services/**/bin/
+.claude
+.superpowers

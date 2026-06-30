@@ -28,14 +28,17 @@ import { CONTRACT_ADDRESS } from '@/lib/contract'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+// ponytail: hoisted — Intl.DateTimeFormat construction is expensive; build once at module load
+const dateFormatter = new Intl.DateTimeFormat('en-US', {
+  year: 'numeric',
+  month: 'long',
+  day: 'numeric',
+})
+
 function formatDate(issuedAt: bigint): string {
   const ms = Number(issuedAt) * 1000
   if (ms === 0) return '—'
-  return new Intl.DateTimeFormat('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  }).format(new Date(ms))
+  return dateFormatter.format(new Date(ms))
 }
 
 function formatISODate(issuedAt: bigint): string {
@@ -169,20 +172,20 @@ export function CertificateDetail({ certificate, className }: CertificateDetailP
       aria-label={`Certificate: ${title}`}
     >
       {/* ── Verified affirmation ──────────────────────────────────────────── */}
-      <div
+      <output
         className={cn(
           'flex items-center gap-2 px-3 py-2 rounded-lg',
           'bg-success/10 border border-success/20',
           'text-sm font-sans font-medium',
         )}
-        role="status"
+        aria-live="polite"
       >
         <ShieldCheck
           className="size-4 shrink-0 text-success"
           aria-hidden="true"
         />
         <span className="text-success">Verified on Base Sepolia</span>
-      </div>
+      </output>
 
       {/* ── Certificate document ──────────────────────────────────────────── */}
       <div className="rounded-xl border border-border bg-surface p-6 md:p-8 space-y-6">

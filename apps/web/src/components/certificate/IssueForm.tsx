@@ -11,7 +11,7 @@
  *   - Sonar-TS: readonly props, no nested ternaries, real elements, globalThis, optional chaining
  */
 
-import { useState, useId, type FormEvent } from 'react'
+import { useState, useRef, useId, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { Loader2, CheckCircle2, AlertCircle, ExternalLink, Copy } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -131,7 +131,8 @@ export function IssueForm({ issuer }: IssueFormProps) {
   })
   const [errors, setErrors] = useState<FieldErrors>({})
   const [acknowledged, setAcknowledged] = useState(false)
-  const [touched, setTouched] = useState(false)
+  // ponytail: useRef — touched is set in handlers and never rendered, no re-render needed
+  const touchedRef = useRef(false)
 
   const { issue, status, tokenId, txHash, error: issueError, reset } = issuer
 
@@ -141,14 +142,14 @@ export function IssueForm({ issuer }: IssueFormProps) {
   function updateField(name: keyof CertificateFields, value: string) {
     const next = { ...fields, [name]: value }
     setFields(next)
-    if (touched) {
+    if (touchedRef.current) {
       setErrors(validateFields(next))
     }
   }
 
   function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
-    setTouched(true)
+    touchedRef.current = true
     const fieldErrors = validateFields(fields)
     setErrors(fieldErrors)
     if (Object.keys(fieldErrors).length > 0) return
@@ -161,18 +162,17 @@ export function IssueForm({ issuer }: IssueFormProps) {
     setFields({ recipient: '', title: '', recipientName: '', issuerName: '', description: '', metadataURI: '' })
     setErrors({})
     setAcknowledged(false)
-    setTouched(false)
+    touchedRef.current = false
   }
 
   // ── Success state ──────────────────────────────────────────────────────────
   if (status === 'success' && txHash) {
     const tokenIdStr = tokenId !== undefined ? tokenId.toString() : undefined
     return (
-      <div
-        role="status"
+      <output
         aria-live="polite"
         className={cn(
-          'rounded-xl border border-success/30 bg-success/5 p-6 space-y-5',
+          'block rounded-xl border border-success/30 bg-success/5 p-6 space-y-5',
           'motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-1 motion-safe:duration-200',
         )}
       >
@@ -239,7 +239,7 @@ export function IssueForm({ issuer }: IssueFormProps) {
         >
           Issue another certificate
         </Button>
-      </div>
+      </output>
     )
   }
 

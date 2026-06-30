@@ -115,7 +115,7 @@ function ContractNotConfigured() {
   return (
     <div
       className="rounded-xl border border-warning/30 bg-warning/5 p-8 text-center space-y-2"
-      role="status"
+      role="alert"
     >
       <p className="font-sans text-sm font-semibold text-ink">Contract not configured</p>
       <p className="font-sans text-xs text-ink-muted">
