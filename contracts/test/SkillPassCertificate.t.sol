@@ -3,6 +3,7 @@ pragma solidity ^0.8.24;
 
 import {Test} from "forge-std/Test.sol";
 import {SkillPassCertificate} from "../src/SkillPassCertificate.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 contract SkillPassCertificateTest is Test {
     SkillPassCertificate internal cert;
@@ -39,5 +40,12 @@ contract SkillPassCertificateTest is Test {
         emit SkillPassCertificate.CertificateIssued(1, recipient, "Full Stack Web3", "SkillPass Academy", block.timestamp);
         vm.prank(owner);
         cert.issueCertificate(recipient, "Full Stack Web3", "Oksa Satya", "SkillPass Academy", "Completed program", "ipfs://abc");
+    }
+
+    function test_IssueCertificate_RevertWhen_NotOwner() public {
+        address attacker = address(0xBAD);
+        vm.prank(attacker);
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, attacker));
+        cert.issueCertificate(recipient, "X", "Y", "Z", "D", "ipfs://x");
     }
 }
