@@ -38,13 +38,20 @@ export default function LandingPage() {
       {/* ── Minimal landing nav ──────────────────────────────────────────── */}
       <header className="sticky top-0 z-10 border-b border-border bg-bg/90 backdrop-blur-sm">
         <div className="mx-auto max-w-[72rem] px-4 md:px-6 flex h-14 items-center justify-between gap-4">
-          {/* Wordmark */}
+          {/* Logo mark + wordmark */}
           <Link
             to="/"
             className="flex shrink-0 items-center gap-2 rounded-lg px-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             aria-label="SkillPass — home"
           >
-            <span className="size-5 rounded-[3px] bg-primary shrink-0" aria-hidden="true" />
+            <img
+              src="/logo.webp"
+              alt=""
+              aria-hidden="true"
+              width={32}
+              height={32}
+              className="size-8 shrink-0"
+            />
             <span className="font-sans text-base font-semibold tracking-tight text-ink">
               SkillPass
             </span>

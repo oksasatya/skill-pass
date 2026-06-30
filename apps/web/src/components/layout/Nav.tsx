@@ -51,16 +51,19 @@ export function Nav({ walletSlot }: NavProps) {
       <div className="mx-auto max-w-[72rem] px-4 md:px-6 lg:px-8">
         <div className="flex h-14 items-center justify-between gap-4">
 
-          {/* Wordmark — logo pending per DESIGN.md */}
+          {/* Logo mark + wordmark */}
           <NavLink
             to="/"
             className="flex shrink-0 items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-lg px-1"
             aria-label="SkillPass — home"
           >
-            {/* Small mark slot: a filled square in primary (placeholder for the real mark) */}
-            <span
-              className="size-5 rounded-[3px] bg-primary shrink-0"
+            <img
+              src="/logo.webp"
+              alt=""
               aria-hidden="true"
+              width={32}
+              height={32}
+              className="size-8 shrink-0"
             />
             <span className="font-sans text-base font-semibold tracking-tight text-ink">
               SkillPass
