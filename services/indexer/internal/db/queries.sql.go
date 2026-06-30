@@ -225,6 +225,68 @@ func (q *Queries) SearchCertificates(ctx context.Context, arg SearchCertificates
 	return items, nil
 }
 
+const searchCertificatesByOwner = `-- name: SearchCertificatesByOwner :many
+SELECT token_id, owner_address, title, recipient_name, issuer_name, description, metadata_uri, issued_at, chain_id, tx_hash, log_index, block_number, block_hash, created_at, updated_at FROM certificates
+WHERE owner_address = $1
+  AND (title ILIKE '%' || $2 || '%'
+    OR issuer_name ILIKE '%' || $2 || '%'
+    OR recipient_name ILIKE '%' || $2 || '%')
+  AND ($3::numeric IS NULL OR token_id < $3)
+ORDER BY token_id DESC
+LIMIT $4
+`
+
+type SearchCertificatesByOwnerParams struct {
+	OwnerAddress string
+	Column2      pgtype.Text
+	Column3      pgtype.Numeric
+	Limit        int32
+}
+
+// SearchCertificatesByOwner searches title/issuer_name/recipient_name for a given owner with keyset pagination.
+// Uses idx_certificates_owner_token (owner_address, token_id DESC).
+// ponytail: ILIKE scan; add pg_trgm GIN index when n grows
+func (q *Queries) SearchCertificatesByOwner(ctx context.Context, arg SearchCertificatesByOwnerParams) ([]Certificate, error) {
+	rows, err := q.db.Query(ctx, searchCertificatesByOwner,
+		arg.OwnerAddress,
+		arg.Column2,
+		arg.Column3,
+		arg.Limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Certificate
+	for rows.Next() {
+		var i Certificate
+		if err := rows.Scan(
+			&i.TokenID,
+			&i.OwnerAddress,
+			&i.Title,
+			&i.RecipientName,
+			&i.IssuerName,
+			&i.Description,
+			&i.MetadataUri,
+			&i.IssuedAt,
+			&i.ChainID,
+			&i.TxHash,
+			&i.LogIndex,
+			&i.BlockNumber,
+			&i.BlockHash,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const upsertCertificate = `-- name: UpsertCertificate :one
 INSERT INTO certificates (
     token_id, owner_address, title, recipient_name, issuer_name,

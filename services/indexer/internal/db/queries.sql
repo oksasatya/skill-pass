@@ -58,6 +58,19 @@ WHERE (title ILIKE '%' || $1 || '%'
 ORDER BY token_id DESC
 LIMIT $3;
 
+-- SearchCertificatesByOwner searches title/issuer_name/recipient_name for a given owner with keyset pagination.
+-- Uses idx_certificates_owner_token (owner_address, token_id DESC).
+-- ponytail: ILIKE scan; add pg_trgm GIN index when n grows
+-- name: SearchCertificatesByOwner :many
+SELECT * FROM certificates
+WHERE owner_address = $1
+  AND (title ILIKE '%' || $2 || '%'
+    OR issuer_name ILIKE '%' || $2 || '%'
+    OR recipient_name ILIKE '%' || $2 || '%')
+  AND ($3::numeric IS NULL OR token_id < $3)
+ORDER BY token_id DESC
+LIMIT $4;
+
 -- CountCertificates returns the total number of certificates (for indexer status).
 -- name: CountCertificates :one
 SELECT count(*) FROM certificates;
