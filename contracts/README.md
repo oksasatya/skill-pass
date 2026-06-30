@@ -1,66 +1,31 @@
-## Foundry
+# SkillPassCertificate — Foundry
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
+## Setup
 
-Foundry consists of:
+1. Install Foundry: `curl -L https://foundry.paradigm.xyz | bash && foundryup`
+2. Install dependencies (not vendored — run after cloning):
+   ```
+   make install
+   ```
+   Or manually: `forge install OpenZeppelin/openzeppelin-contracts@v5.1.0 --no-git && forge install foundry-rs/forge-std --no-git`
+3. `cp .env.example .env` and fill in a **throwaway testnet** `PRIVATE_KEY`,
+   `BASE_SEPOLIA_RPC_URL`, and `BASESCAN_API_KEY`. Never commit `.env`.
+4. Fund the deployer with Base Sepolia ETH from a faucet.
 
-- **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
-- **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
-- **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
-- **Chisel**: Fast, utilitarian, and verbose solidity REPL.
+## Test
 
-## Documentation
+    make test
+    # or: forge test -vvv
 
-https://book.getfoundry.sh/
+## Deploy to Base Sepolia (chainId 84532)
 
-## Usage
+    source .env
+    forge script script/Deploy.s.sol:Deploy \
+      --rpc-url base_sepolia --broadcast --verify -vvv
 
-### Build
+## Export ABI (for the frontend in Phase 2)
 
-```shell
-$ forge build
-```
+    jq '.abi' out/SkillPassCertificate.sol/SkillPassCertificate.json \
+      > ../deployments/SkillPassCertificate.abi.json
 
-### Test
-
-```shell
-$ forge test
-```
-
-### Format
-
-```shell
-$ forge fmt
-```
-
-### Gas Snapshots
-
-```shell
-$ forge snapshot
-```
-
-### Anvil
-
-```shell
-$ anvil
-```
-
-### Deploy
-
-```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
-```
-
-### Cast
-
-```shell
-$ cast <subcommand>
-```
-
-### Help
-
-```shell
-$ forge --help
-$ anvil --help
-$ cast --help
-```
+Record the deployed address in `../deployments/base-sepolia.json`.
