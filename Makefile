@@ -1,4 +1,4 @@
-.PHONY: proto buf-lint sqlc migrate-test abigen
+.PHONY: proto buf-lint sqlc migrate-test abigen run-indexer
 
 # Regenerate Go code from proto definitions (remote buf plugins, no local protoc needed)
 proto:
@@ -27,3 +27,9 @@ migrate-test:
 	sleep 3
 	go run ./services/indexer/cmd/verify-migrate/... || (docker stop skillpass-migrate-test; exit 1)
 	docker stop skillpass-migrate-test
+
+# Run the indexer locally (requires env vars — see services/indexer/internal/config/config.go)
+# Required: DATABASE_URL, ETH_RPC_URL, CONTRACT_ADDRESS, CHAIN_ID
+# Optional: GRPC_ADDR (":50051"), START_BLOCK ("0"), BATCH_SIZE ("2000"), POLL_INTERVAL ("5s")
+run-indexer:
+	go run ./services/indexer/cmd/indexer
