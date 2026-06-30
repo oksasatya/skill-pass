@@ -1,0 +1,8 @@
+node_modules
+apps/web/dist
+apps/web/node_modules
+contracts/out
+contracts/cache
+.git
+.idea
+.DS_Store

@@ -1,4 +1,5 @@
-.PHONY: proto buf-lint sqlc migrate-test abigen run-indexer
+.PHONY: proto buf-lint sqlc migrate-test abigen run-indexer \
+        dev-up dev-seed dev-logs dev-verify dev-down
 
 # Regenerate Go code from proto definitions (remote buf plugins, no local protoc needed)
 proto:
@@ -33,3 +34,32 @@ migrate-test:
 # Optional: GRPC_ADDR (":50051"), START_BLOCK ("0"), BATCH_SIZE ("2000"), POLL_INTERVAL ("5s")
 run-indexer:
 	go run ./services/indexer/cmd/indexer
+
+# ---- dev stack (docker compose) ----
+# Bring up postgres + anvil + indexer (builds indexer image)
+dev-up:
+	docker compose -f deploy/docker-compose.yml up -d --build
+
+# Deploy contract + issue 2 test certificates against local anvil
+dev-seed:
+	bash deploy/seed.sh
+
+# Tail indexer logs
+dev-logs:
+	docker compose -f deploy/docker-compose.yml logs -f indexer
+
+# Verify indexer via gRPC reflection (requires grpcurl or go run fallback)
+dev-verify:
+	@GRPCURL=$$(command -v grpcurl 2>/dev/null || echo "go run github.com/fullstorydev/grpcurl/cmd/grpcurl@latest"); \
+	echo "--- list services ---"; \
+	$$GRPCURL -plaintext localhost:50051 list; \
+	echo "--- GetIndexerStatus ---"; \
+	$$GRPCURL -plaintext -d '{}' localhost:50051 skillpass.cert.v1.CertificateQuery/GetIndexerStatus; \
+	echo "--- ListCertificates ---"; \
+	$$GRPCURL -plaintext -d '{}' localhost:50051 skillpass.cert.v1.CertificateQuery/ListCertificates; \
+	echo "--- GetCertificate token_id=0 ---"; \
+	$$GRPCURL -plaintext -d '{"token_id":"0"}' localhost:50051 skillpass.cert.v1.CertificateQuery/GetCertificate
+
+# Tear down and remove volumes
+dev-down:
+	docker compose -f deploy/docker-compose.yml down -v
