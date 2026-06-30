@@ -9,9 +9,11 @@ sql:
         out: "internal/db"
         sql_package: "pgx/v5"
         overrides:
-          # token_id is NUMERIC(78,0) to hold Solidity uint256; map to string
-          # to align with proto's string token_id. Column-scoped so other numeric
-          # columns (if any are added later) keep their natural pgtype.Numeric.
+          # token_id is NUMERIC(78,0) to hold Solidity uint256; map to string to
+          # align with proto's string token_id. Column-scoped: the returned row's
+          # token_id (and direct column params) are Go string. Keyset cursor
+          # params (token_id < $n::numeric) stay pgtype.Numeric — the repo adapter
+          # (T4) converts the string cursor at that one boundary.
           - column: "certificates.token_id"
             go_type: "string"
         emit_json_tags: false
