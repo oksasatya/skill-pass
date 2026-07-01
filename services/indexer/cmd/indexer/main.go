@@ -91,11 +91,12 @@ func main() {
 	asynqClient := asynq.NewClient(asynqRedisOpt)
 	defer asynqClient.Close() //nolint:errcheck // best-effort close on process exit
 
-	worker.SetEnqueuer(asynqjobs.NewEnqueuer(asynqClient))
+	enqueuer := asynqjobs.NewEnqueuer(asynqClient)
+	worker.SetEnqueuer(enqueuer)
 
 	s := buildGRPCServer(repo, src, broadcaster, trendService, log)
 
-	asynqServer, asynqMux, scheduler := buildAsynqRuntime(asynqRedisOpt, trendService, log)
+	asynqServer, asynqMux, scheduler := buildAsynqRuntime(asynqRedisOpt, trendService, repo, enqueuer, log)
 
 	svc := runtimeServices{
 		grpcServer:  s,
@@ -130,19 +131,23 @@ func buildGRPCServer(repo usecase.CertificateRepo, src usecase.EventSource, sub 
 	return s
 }
 
-// buildAsynqRuntime wires the asynq processing server (handles enqueued refresh tasks) and
-// scheduler (15-minute cron backstop, in case an event-triggered enqueue is ever missed).
+// buildAsynqRuntime wires the asynq processing server (handles enqueued refresh/sweep
+// tasks) and scheduler (cron backstops: 15-min trend-refresh, 5-min webhook-outbox sweep).
 // Returns the mux alongside the server since Run(mux) needs the exact same instance the
 // handler was registered on.
-func buildAsynqRuntime(redisOpt asynq.RedisClientOpt, trend *usecase.TrendService, log *slog.Logger) (*asynq.Server, *asynq.ServeMux, *asynq.Scheduler) {
+func buildAsynqRuntime(redisOpt asynq.RedisClientOpt, trend *usecase.TrendService, repo usecase.CertificateRepo, enqueuer usecase.TaskEnqueuer, log *slog.Logger) (*asynq.Server, *asynq.ServeMux, *asynq.Scheduler) {
 	server := asynq.NewServer(redisOpt, asynq.Config{Concurrency: 5})
 
 	mux := asynq.NewServeMux()
 	mux.Handle(usecase.TrendRefreshTaskType, asynqjobs.NewRefreshTrendCacheHandler(trend, log))
+	mux.Handle(usecase.WebhookSweepTaskType, asynqjobs.NewWebhookSweepHandler(repo, enqueuer, log))
 
 	scheduler := asynq.NewScheduler(redisOpt, nil)
 	if _, err := scheduler.Register("*/15 * * * *", asynqjobs.NewRefreshTrendCacheTask()); err != nil {
 		log.Error("register trend-refresh cron", "err", err)
+	}
+	if _, err := scheduler.Register("*/5 * * * *", asynqjobs.NewWebhookSweepTask()); err != nil {
+		log.Error("register webhook-sweep cron", "err", err)
 	}
 
 	return server, mux, scheduler
