@@ -48,6 +48,22 @@ services:
     networks:
       - skillpass
 
+  gateway:
+    build:
+      context: ..
+      dockerfile: services/gateway/Dockerfile
+    depends_on:
+      indexer:
+        condition: service_started
+    environment:
+      INDEXER_GRPC_ADDR: "indexer:50051"
+      HTTP_ADDR: ":8080"
+      REQUEST_TIMEOUT: "5s"
+    ports:
+      - "8080:8080"
+    networks:
+      - skillpass
+
 volumes:
   pg_data:
 

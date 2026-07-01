@@ -18,14 +18,17 @@ type Deps struct {
 	RequestTimeout time.Duration
 }
 
-// NewRouter builds the gateway's HTTP mux. Routes are added incrementally as
-// REST/SSE handlers land (certificates list/get, stream).
+// NewRouter builds the gateway's HTTP mux, wrapped with request logging + panic recovery.
 func NewRouter(d Deps) http.Handler {
+	if d.Log == nil {
+		d.Log = slog.Default()
+	}
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", Healthz)
 	mux.Handle("GET /readyz", Readyz(d.Health, d.RequestTimeout))
 	mux.Handle("GET /certificates", ListCertificates(d))
 	mux.Handle("GET /certificates/stream", StreamCertificateEvents(d))
 	mux.Handle("GET /certificates/{tokenId}", GetCertificate(d))
-	return mux
+	return WithObservability(mux, d.Log)
 }
