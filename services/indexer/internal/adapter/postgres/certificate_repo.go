@@ -22,6 +22,8 @@ var _ usecase.CertificateRepo = (*CertificateRepo)(nil)
 const (
 	defaultLimit = 20
 	maxLimit     = 100
+
+	errGetIssuanceTrendWrap = "postgres.CertificateRepo.GetIssuanceTrend: %w"
 )
 
 // CertificateRepo satisfies usecase.CertificateRepo via Postgres.
@@ -155,19 +157,19 @@ func (r *CertificateRepo) GetIssuanceTrend(ctx context.Context, bucket usecase.T
 	case usecase.TrendBucketDay:
 		rows, err := r.queries.TrendByDay(ctx, sinceArg)
 		if err != nil {
-			return nil, fmt.Errorf("postgres.CertificateRepo.GetIssuanceTrend: %w", err)
+			return nil, fmt.Errorf(errGetIssuanceTrendWrap, err)
 		}
 		return toTrendPoints(rows), nil
 	case usecase.TrendBucketWeek:
 		rows, err := r.queries.TrendByWeek(ctx, sinceArg)
 		if err != nil {
-			return nil, fmt.Errorf("postgres.CertificateRepo.GetIssuanceTrend: %w", err)
+			return nil, fmt.Errorf(errGetIssuanceTrendWrap, err)
 		}
 		return toTrendPoints(rows), nil
 	case usecase.TrendBucketMonth:
 		rows, err := r.queries.TrendByMonth(ctx, sinceArg)
 		if err != nil {
-			return nil, fmt.Errorf("postgres.CertificateRepo.GetIssuanceTrend: %w", err)
+			return nil, fmt.Errorf(errGetIssuanceTrendWrap, err)
 		}
 		return toTrendPoints(rows), nil
 	default:
