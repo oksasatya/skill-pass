@@ -22,6 +22,10 @@ func (f *fakeEventSource) HeadBlock(_ context.Context) (uint64, error) {
 	return f.head, nil
 }
 
+func (f *fakeEventSource) BlockHash(_ context.Context, _ uint64) (string, error) {
+	return "0xfakehash", nil
+}
+
 func (f *fakeEventSource) IssuedLogs(_ context.Context, from, to uint64) ([]domain.IssuedLog, error) {
 	var out []domain.IssuedLog
 	for b := from; b <= to; b++ {
@@ -78,6 +82,16 @@ func (r *fakeRepo) GetState(_ context.Context) (domain.IndexerState, error) {
 
 func (r *fakeRepo) SaveState(_ context.Context, s domain.IndexerState) error {
 	r.state = s
+	return nil
+}
+
+func (r *fakeRepo) DeleteFromBlock(_ context.Context, _ int64, blockNumber uint64) error {
+	// delete all certs with block_number >= blockNumber
+	for id, c := range r.certs {
+		if uint64(c.BlockNumber) >= blockNumber {
+			delete(r.certs, id)
+		}
+	}
 	return nil
 }
 

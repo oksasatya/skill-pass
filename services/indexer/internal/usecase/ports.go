@@ -41,12 +41,19 @@ type CertificateRepo interface {
 
 	// SaveState persists the indexer checkpoint.
 	SaveState(ctx context.Context, s domain.IndexerState) error
+
+	// DeleteFromBlock removes all certificates at or above blockNumber for chainID —
+	// used by reorg reconcile to roll back the confirmation window.
+	DeleteFromBlock(ctx context.Context, chainID int64, blockNumber uint64) error
 }
 
 // EventSource is the chain read side (ethclient adapter implements in T5).
 type EventSource interface {
 	// HeadBlock returns the current chain head block number.
 	HeadBlock(ctx context.Context) (uint64, error)
+
+	// BlockHash returns the canonical header hash of the given block number.
+	BlockHash(ctx context.Context, blockNumber uint64) (string, error)
 
 	// IssuedLogs returns CertificateIssued logs in [fromBlock, toBlock] inclusive.
 	IssuedLogs(ctx context.Context, fromBlock, toBlock uint64) ([]domain.IssuedLog, error)

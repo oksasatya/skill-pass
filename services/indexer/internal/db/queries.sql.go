@@ -23,6 +23,22 @@ func (q *Queries) CountCertificates(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const deleteCertificatesFromBlock = `-- name: DeleteCertificatesFromBlock :exec
+DELETE FROM certificates WHERE chain_id = $1 AND block_number >= $2
+`
+
+type DeleteCertificatesFromBlockParams struct {
+	ChainID     int64
+	BlockNumber int64
+}
+
+// DeleteCertificatesFromBlock removes all certificates at or above the given block number
+// (chain-scoped) — used by reorg reconcile to roll back the confirmation window.
+func (q *Queries) DeleteCertificatesFromBlock(ctx context.Context, arg DeleteCertificatesFromBlockParams) error {
+	_, err := q.db.Exec(ctx, deleteCertificatesFromBlock, arg.ChainID, arg.BlockNumber)
+	return err
+}
+
 const getCertificateByTokenID = `-- name: GetCertificateByTokenID :one
 SELECT token_id, owner_address, title, recipient_name, issuer_name, description, metadata_uri, issued_at, chain_id, tx_hash, log_index, block_number, block_hash, created_at, updated_at FROM certificates WHERE token_id = $1
 `

@@ -45,8 +45,9 @@ func (f *fakeRepo) Count(_ context.Context) (int64, error) { return f.count, f.c
 func (f *fakeRepo) GetState(_ context.Context) (domain.IndexerState, error) {
 	return f.state, f.stateErr
 }
-func (f *fakeRepo) Upsert(_ context.Context, _ domain.Certificate) error     { return nil }
-func (f *fakeRepo) SaveState(_ context.Context, _ domain.IndexerState) error { return nil }
+func (f *fakeRepo) Upsert(_ context.Context, _ domain.Certificate) error       { return nil }
+func (f *fakeRepo) SaveState(_ context.Context, _ domain.IndexerState) error   { return nil }
+func (f *fakeRepo) DeleteFromBlock(_ context.Context, _ int64, _ uint64) error { return nil }
 
 type fakeEventSource struct {
 	head    uint64
@@ -55,6 +56,9 @@ type fakeEventSource struct {
 
 func (f *fakeEventSource) HeadBlock(_ context.Context) (uint64, error) {
 	return f.head, f.headErr
+}
+func (f *fakeEventSource) BlockHash(_ context.Context, _ uint64) (string, error) {
+	return "0xfakehash", nil
 }
 func (f *fakeEventSource) IssuedLogs(_ context.Context, _, _ uint64) ([]domain.IssuedLog, error) {
 	return nil, nil

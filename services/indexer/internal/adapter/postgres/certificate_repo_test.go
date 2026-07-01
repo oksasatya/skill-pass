@@ -483,3 +483,40 @@ func TestListHasMoreFalseOnLastPage(t *testing.T) {
 		t.Errorf("Items: got %d want 3", len(page.Items))
 	}
 }
+
+// TestDeleteFromBlock verifies DeleteFromBlock deletes certs at or above a boundary block.
+func TestDeleteFromBlock(t *testing.T) {
+	pool := startPostgres(t)
+	repo := postgres.NewCertificateRepo(pool)
+	ctx := context.Background()
+
+	below := makeCert("1")
+	below.ChainID = 1
+	below.BlockNumber = 100
+	atBoundary := makeCertOwner("2", "0xabcdef1234567890abcdef1234567890abcdef12")
+	atBoundary.ChainID = 1
+	atBoundary.BlockNumber = 150
+	above := makeCertOwner("3", "0xabcdef1234567890abcdef1234567890abcdef12")
+	above.ChainID = 1
+	above.BlockNumber = 200
+
+	for _, c := range []domain.Certificate{below, atBoundary, above} {
+		if err := repo.Upsert(ctx, c); err != nil {
+			t.Fatalf("upsert %s: %v", c.TokenID, err)
+		}
+	}
+
+	if err := repo.DeleteFromBlock(ctx, 1, 150); err != nil {
+		t.Fatalf("DeleteFromBlock: %v", err)
+	}
+
+	if _, err := repo.GetByTokenID(ctx, "1"); err != nil {
+		t.Fatalf("token 1 (below boundary) should survive: %v", err)
+	}
+	if _, err := repo.GetByTokenID(ctx, "2"); !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("token 2 (at boundary, inclusive) should be deleted, got err=%v", err)
+	}
+	if _, err := repo.GetByTokenID(ctx, "3"); !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("token 3 (above boundary) should be deleted, got err=%v", err)
+	}
+}

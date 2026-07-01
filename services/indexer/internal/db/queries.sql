@@ -89,3 +89,8 @@ ON CONFLICT (id) DO UPDATE SET
     last_processed_hash  = EXCLUDED.last_processed_hash,
     updated_at           = now()
 RETURNING *;
+
+-- DeleteCertificatesFromBlock removes all certificates at or above the given block number
+-- (chain-scoped) — used by reorg reconcile to roll back the confirmation window.
+-- name: DeleteCertificatesFromBlock :exec
+DELETE FROM certificates WHERE chain_id = $1 AND block_number >= $2;

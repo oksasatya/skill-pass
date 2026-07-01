@@ -56,6 +56,15 @@ func (e *EventSource) HeadBlock(ctx context.Context) (uint64, error) {
 	return n, nil
 }
 
+// BlockHash returns the canonical header hash of the given block number.
+func (e *EventSource) BlockHash(ctx context.Context, blockNumber uint64) (string, error) {
+	header, err := e.client.HeaderByNumber(ctx, new(big.Int).SetUint64(blockNumber))
+	if err != nil {
+		return "", fmt.Errorf("header by number %d: %w", blockNumber, err)
+	}
+	return header.Hash().Hex(), nil
+}
+
 // IssuedLogs returns CertificateIssued event logs in [fromBlock, toBlock] inclusive.
 // Only tokenId + provenance fields are extracted; the full cert is fetched via GetCertificate.
 func (e *EventSource) IssuedLogs(ctx context.Context, fromBlock, toBlock uint64) ([]domain.IssuedLog, error) {

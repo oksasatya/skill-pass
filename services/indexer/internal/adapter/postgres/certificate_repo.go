@@ -131,6 +131,20 @@ func (r *CertificateRepo) SaveState(ctx context.Context, s domain.IndexerState) 
 	return nil
 }
 
+// DeleteFromBlock removes all certificates at or above blockNumber for chainID —
+// O(k) rows deleted, where k is the number of certificates in the reorg window
+// (bounded by the 12-block confirmation depth, small at any realistic scale).
+func (r *CertificateRepo) DeleteFromBlock(ctx context.Context, chainID int64, blockNumber uint64) error {
+	err := r.queries.DeleteCertificatesFromBlock(ctx, db.DeleteCertificatesFromBlockParams{
+		ChainID:     chainID,
+		BlockNumber: int64(blockNumber), //nolint:gosec // blockNumber realistically << max int64
+	})
+	if err != nil {
+		return fmt.Errorf("postgres.CertificateRepo.DeleteFromBlock: %w", err)
+	}
+	return nil
+}
+
 // --- helpers ---
 
 // normalizeOwner lowercases and validates the owner filter.
