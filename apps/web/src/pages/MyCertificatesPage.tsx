@@ -3,7 +3,7 @@
  *
  * States:
  *   not connected           → prompt to connect wallet
- *   contractNotConfigured   → clean "contract not configured" notice
+ *   gatewayNotConfigured   → clean "contract not configured" notice
  *   loading                 → skeleton grid (card-matched)
  *   error                   → error state with retry
  *   empty                   → designed empty state (what certs are + next step)
@@ -119,11 +119,11 @@ function NotConfigured() {
     >
       <AlertTriangle className="size-5 text-warning shrink-0 mt-0.5" aria-hidden="true" />
       <div className="space-y-1">
-        <p className="text-sm font-semibold text-ink">Contract not configured</p>
+        <p className="text-sm font-semibold text-ink">Gateway not configured</p>
         <p className="text-sm text-ink-muted">
           Set{' '}
           <code className="font-mono text-xs bg-surface-2 px-1 py-0.5 rounded">
-            VITE_CONTRACT_ADDRESS
+            VITE_GATEWAY_URL
           </code>{' '}
           in{' '}
           <code className="font-mono text-xs bg-surface-2 px-1 py-0.5 rounded">.env</code>{' '}
@@ -167,7 +167,7 @@ function CertGrid({ certificates }: CertGridProps) {
 
 export default function MyCertificatesPage() {
   const { isConnected } = useAccount()
-  const { certificates, isLoading, error, refetch, contractNotConfigured } = useCertificates()
+  const { certificates, isLoading, error, refetch, gatewayNotConfigured } = useCertificates()
 
   return (
     <section className="space-y-6">
@@ -180,21 +180,21 @@ export default function MyCertificatesPage() {
         </p>
       </header>
 
-      {contractNotConfigured && <NotConfigured />}
+      {gatewayNotConfigured && <NotConfigured />}
 
-      {!contractNotConfigured && !isConnected && <ConnectPrompt />}
+      {!gatewayNotConfigured && !isConnected && <ConnectPrompt />}
 
-      {!contractNotConfigured && isConnected && isLoading && <SkeletonGrid />}
+      {!gatewayNotConfigured && isConnected && isLoading && <SkeletonGrid />}
 
-      {!contractNotConfigured && isConnected && !isLoading && !!error && (
+      {!gatewayNotConfigured && isConnected && !isLoading && !!error && (
         <ErrorState onRetry={refetch} />
       )}
 
-      {!contractNotConfigured && isConnected && !isLoading && !error && certificates.length === 0 && (
+      {!gatewayNotConfigured && isConnected && !isLoading && !error && certificates.length === 0 && (
         <EmptyState />
       )}
 
-      {!contractNotConfigured && isConnected && !isLoading && !error && certificates.length > 0 && (
+      {!gatewayNotConfigured && isConnected && !isLoading && !error && certificates.length > 0 && (
         <>
           <p className="text-sm text-ink-muted">
             {certificates.length === 1 ? '1 certificate' : `${certificates.length} certificates`}

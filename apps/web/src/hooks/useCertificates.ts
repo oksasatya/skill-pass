@@ -1,19 +1,18 @@
 /**
- * useCertificates — hybrid read: event getLogs (by indexed recipient) → multicall getCertificate.
+ * useCertificates — reads through the gateway BFF (paginated/searchable REST +
+ * SSE live updates), never the chain directly. See docs/superpowers/plans/
+ * 2026-06-30-skillpass-phase3-backend.md BE-2 Task 5.
  *
- * Read strategy (§7.3 spec):
- *   1. getContractEvents('CertificateIssued', filter by recipient) → tokenIds  O(k) over logs
- *   2. multicall getCertificate for all tokenIds in ONE round-trip               O(k) reads
+ * Guard: if VITE_GATEWAY_URL is undefined → return gatewayNotConfigured=true, no crash.
  *
- * No N+1. k = number of certs owned by this address (typically small).
- *
- * Guard: if CONTRACT_ADDRESS is undefined → return contractNotConfigured=true, no crash.
+ * ponytail: single-page fetch at a generous size (DEFAULT_PAGE_SIZE); add a cursor-based
+ * "load more" once a user's cert count realistically exceeds this in practice.
  */
 
-import { useQuery } from '@tanstack/react-query'
-import { usePublicClient, useAccount } from 'wagmi'
-import { CONTRACT_ADDRESS, CONTRACT_ABI } from '@/lib/contract'
-import type { Abi } from 'viem'
+import { useEffect } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useAccount } from 'wagmi'
+import { GATEWAY_URL, fetchCertificates, certificateStreamUrl, type GatewayCertificate } from '@/lib/api'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -33,116 +32,70 @@ export type UseCertificatesResult = {
   readonly isLoading: boolean
   readonly error: Error | null
   readonly refetch: () => void
-  readonly contractNotConfigured: boolean
+  readonly gatewayNotConfigured: boolean
 }
 
-// ── Pure helpers (TDD: tested in useCertificates.test.ts) ─────────────────────
+const DEFAULT_PAGE_SIZE = 100
 
-/**
- * Extract unique tokenIds from raw CertificateIssued log args.
- * Args shape: { tokenId: bigint, recipient: `0x${string}`, ... }
- * ponytail: Set deduplicates in case the same event replays (shouldn't happen on-chain; defensive).
- */
-export function extractTokenIds(
-  logs: ReadonlyArray<{ readonly args?: Readonly<Record<string, unknown>> }>,
-): bigint[] {
-  const seen = new Set<bigint>()
-  const ids: bigint[] = []
-  for (const log of logs) {
-    const raw = log.args?.['tokenId']
-    if (typeof raw === 'bigint' && !seen.has(raw)) {
-      seen.add(raw)
-      ids.push(raw)
-    }
-  }
-  return ids
-}
+// ── Pure helper (TDD: tested in useCertificates.test.ts) ──────────────────────
 
-/**
- * Map a multicall result tuple [cert, recipient] into a CertificateView.
- * Returns null if the result errored or has unexpected shape (skipped silently).
- */
-export function mapMulticallResult(
-  tokenId: bigint,
-  result: Readonly<{ status: 'success' | 'failure'; result?: unknown }>,
-): CertificateView | null {
-  if (result.status !== 'success' || !Array.isArray(result.result)) return null
-  const [cert, recipient] = result.result as [unknown, unknown]
-  if (
-    typeof cert !== 'object' ||
-    cert === null ||
-    typeof recipient !== 'string'
-  ) {
-    return null
-  }
-  const c = cert as Record<string, unknown>
+/** Maps a gateway certificate DTO into the view shape the UI already renders. */
+export function toCertificateView(g: GatewayCertificate): CertificateView {
+  const issuedAtMs = Date.parse(g.issuedAt)
   return {
-    tokenId,
-    title: typeof c['title'] === 'string' ? c['title'] : '',
-    recipientName: typeof c['recipientName'] === 'string' ? c['recipientName'] : '',
-    issuerName: typeof c['issuerName'] === 'string' ? c['issuerName'] : '',
-    description: typeof c['description'] === 'string' ? c['description'] : '',
-    metadataURI: typeof c['metadataURI'] === 'string' ? c['metadataURI'] : '',
-    issuedAt: typeof c['issuedAt'] === 'bigint' ? c['issuedAt'] : 0n,
-    recipient: recipient as `0x${string}`,
+    tokenId: BigInt(g.tokenId),
+    title: g.title,
+    recipientName: g.recipientName,
+    issuerName: g.issuerName,
+    description: g.description,
+    metadataURI: g.metadataUri,
+    issuedAt: Number.isNaN(issuedAtMs) ? 0n : BigInt(Math.floor(issuedAtMs / 1000)),
+    recipient: g.ownerAddress as `0x${string}`,
   }
 }
 
 // ── Hook ───────────────────────────────────────────────────────────────────────
 
 /**
- * Returns certificates owned by the given address.
+ * Returns certificates owned by the given address, with live updates via SSE.
  * Accepts an optional address override for composability; defaults to connected wallet.
  */
 export function useCertificates(ownerOverride?: `0x${string}`): UseCertificatesResult {
   const { address: connectedAddress } = useAccount()
-  const publicClient = usePublicClient()
+  const queryClient = useQueryClient()
 
   const owner = ownerOverride ?? connectedAddress
-  const contractNotConfigured = !CONTRACT_ADDRESS
+  const gatewayNotConfigured = !GATEWAY_URL
+  const queryKey = ['certificates', owner, GATEWAY_URL]
 
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ['certificates', owner, CONTRACT_ADDRESS],
-    enabled: !!owner && !contractNotConfigured && !!publicClient,
-    staleTime: 30_000, // ponytail: 30s stale — chain reads are slow; balance freshness vs rpc cost
+    queryKey,
+    enabled: !!owner && !gatewayNotConfigured,
+    staleTime: 30_000,
     queryFn: async (): Promise<CertificateView[]> => {
-      if (!owner || !publicClient || !CONTRACT_ADDRESS) return []
-
-      // Step 1: getLogs filtered by indexed recipient — O(k) log scan
-      const logs = await publicClient.getContractEvents({
-        address: CONTRACT_ADDRESS,
-        abi: CONTRACT_ABI,
-        eventName: 'CertificateIssued',
-        args: { recipient: owner },
-        fromBlock: 0n,
-      })
-
-      const tokenIds = extractTokenIds(logs as ReadonlyArray<{ args?: Record<string, unknown> }>)
-      if (tokenIds.length === 0) return []
-
-      // Step 2: multicall getCertificate — ONE round-trip, no N+1
-      // ponytail: cast ABI to viem's Abi type — JSON import loses literal narrowing
-      const calls = tokenIds.map((tokenId) => ({
-        address: CONTRACT_ADDRESS as `0x${string}`,
-        abi: CONTRACT_ABI as Abi,
-        functionName: 'getCertificate' as const,
-        args: [tokenId] as const,
-      }))
-
-      const results = await publicClient.multicall({ contracts: calls })
-
-      // Map results → CertificateView[], filter out any failures
-      return results
-        .map((result, i) => mapMulticallResult(tokenIds[i]!, result as { status: 'success' | 'failure'; result?: unknown }))
-        .filter((v): v is CertificateView => v !== null)
+      if (!owner) return []
+      const page = await fetchCertificates({ owner, pageSize: DEFAULT_PAGE_SIZE })
+      return page.certificates.map(toCertificateView)
     },
   })
 
+  // Live updates: an "issued" SSE event for this owner invalidates the query, triggering a
+  // refetch through the existing cache — no manual cache surgery.
+  useEffect(() => {
+    if (!owner || gatewayNotConfigured) return
+
+    const source = new EventSource(certificateStreamUrl(owner))
+    source.onmessage = () => {
+      void queryClient.invalidateQueries({ queryKey: ['certificates', owner, GATEWAY_URL] })
+    }
+    return () => source.close()
+  }, [owner, gatewayNotConfigured, queryClient])
+
   return {
     certificates: data ?? [],
-    isLoading: !contractNotConfigured && !!owner && isLoading,
+    isLoading: !gatewayNotConfigured && !!owner && isLoading,
     error: error instanceof Error ? error : error ? new Error(String(error)) : null,
     refetch: () => { void refetch() },
-    contractNotConfigured,
+    gatewayNotConfigured,
   }
 }

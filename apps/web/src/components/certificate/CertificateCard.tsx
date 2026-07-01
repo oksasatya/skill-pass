@@ -25,7 +25,7 @@ const dateFormatter = new Intl.DateTimeFormat('en-US', {
 
 function formatIssuedDate(issuedAt: bigint): string {
   const ms = Number(issuedAt) * 1000
-  // issuedAt = 0 means unknown (fallback from mapMulticallResult)
+  // issuedAt = 0 means unknown (fallback from toCertificateView on an unparsable date)
   if (ms === 0) return '—'
   return dateFormatter.format(new Date(ms))
 }
