@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -72,11 +74,38 @@ func TestParsePageSize(t *testing.T) {
 		{"zero defaults", "0", defaultPageSize},
 		{"negative defaults", "-5", defaultPageSize},
 		{"non-numeric defaults", "abc", defaultPageSize},
+		{"clamps at max", "1000000", maxPageSize},
+		{"at max is unclamped", strconv.Itoa(maxPageSize), maxPageSize},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := parsePageSize(tt.raw); got != tt.want {
 				t.Errorf("parsePageSize(%q) = %d, want %d", tt.raw, got, tt.want)
+			}
+		})
+	}
+}
+
+// --- isValidTokenID ---
+
+func TestIsValidTokenID(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  string
+		want bool
+	}{
+		{"empty rejected", "", false},
+		{"digits accepted", "42", true},
+		{"non-digit rejected", "42abc", false},
+		{"whitespace rejected", " 42", false},
+		{"sql-injection-shaped rejected", "1; DROP TABLE certificates;", false},
+		{"max length accepted", strings.Repeat("9", maxTokenIDDigits), true},
+		{"over max length rejected", strings.Repeat("9", maxTokenIDDigits+1), false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isValidTokenID(tt.raw); got != tt.want {
+				t.Errorf("isValidTokenID(%q) = %v, want %v", tt.raw, got, tt.want)
 			}
 		})
 	}
@@ -154,6 +183,18 @@ func TestGetCertificate_NotFound(t *testing.T) {
 
 func TestGetCertificate_EmptyTokenID(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/certificates/", nil)
+	w := httptest.NewRecorder()
+
+	GetCertificate(newDeps(&fakeCertClient{}))(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", w.Code)
+	}
+}
+
+func TestGetCertificate_InvalidTokenIDShape(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/certificates/1abc", nil)
+	req.SetPathValue("tokenId", "1; DROP TABLE certificates;")
 	w := httptest.NewRecorder()
 
 	GetCertificate(newDeps(&fakeCertClient{}))(w, req)

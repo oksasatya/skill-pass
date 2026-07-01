@@ -2,12 +2,12 @@
  * MyCertificatesPage — /app/my-certificates
  *
  * States:
- *   not connected           → prompt to connect wallet
- *   gatewayNotConfigured   → clean "contract not configured" notice
- *   loading                 → skeleton grid (card-matched)
- *   error                   → error state with retry
- *   empty                   → designed empty state (what certs are + next step)
- *   data                    → grid of CertificateCard with stagger entrance
+ *   not connected        → prompt to connect wallet
+ *   gatewayNotConfigured → clean "gateway not configured" notice
+ *   loading              → skeleton grid (card-matched)
+ *   error                → error state with retry
+ *   empty                → designed empty state (what certs are + next step)
+ *   data                 → grid of CertificateCard with stagger entrance
  *
  * Grid: repeat(auto-fill, minmax(300px, 1fr)) per DESIGN.md.
  * Stagger: each card fades+rises ~8px, 40ms offset. Reduced-motion: instant.
