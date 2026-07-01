@@ -87,3 +87,16 @@ type TrendCache interface {
 	Get(ctx context.Context, key string) ([]TrendPoint, bool, error)
 	Set(ctx context.Context, key string, points []TrendPoint) error
 }
+
+// TrendRefreshTaskType identifies the asynq task that recomputes and caches every
+// supported trend bucket/preset combination. Defined here (not in the asynq adapter) so
+// Worker can reference it without importing adapter code.
+const TrendRefreshTaskType = "trend:refresh"
+
+// TaskEnqueuer lets the Worker trigger background jobs after ingest. Optional — the Worker
+// is nil-safe if none is wired.
+type TaskEnqueuer interface {
+	// EnqueueUnique enqueues a task, deduped by taskID: a second call with the same taskID
+	// while one is still pending/processing is a no-op.
+	EnqueueUnique(ctx context.Context, taskType, taskID string) error
+}
