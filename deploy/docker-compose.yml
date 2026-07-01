@@ -24,6 +24,16 @@ services:
     networks:
       - skillpass
 
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - skillpass
+
   indexer:
     build:
       context: ..
@@ -33,9 +43,12 @@ services:
         condition: service_healthy
       anvil:
         condition: service_started
+      redis:
+        condition: service_healthy
     environment:
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/skillpass?sslmode=disable
       ETH_RPC_URL: http://anvil:8545
+      REDIS_ADDR: "redis:6379"
       # Deterministic address: account[0] nonce=0 CREATE on a fresh anvil
       CONTRACT_ADDRESS: "0x5FbDB2315678afecb367f032d93F642f64180aa3"
       CHAIN_ID: "31337"

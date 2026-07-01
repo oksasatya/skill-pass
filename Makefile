@@ -30,7 +30,7 @@ migrate-test:
 	docker stop skillpass-migrate-test
 
 # Run the indexer locally (requires env vars — see services/indexer/internal/config/config.go)
-# Required: DATABASE_URL, ETH_RPC_URL, CONTRACT_ADDRESS, CHAIN_ID
+# Required: DATABASE_URL, ETH_RPC_URL, CONTRACT_ADDRESS, CHAIN_ID, REDIS_ADDR
 # Optional: GRPC_ADDR (":50051"), START_BLOCK ("0"), BATCH_SIZE ("2000"), POLL_INTERVAL ("5s")
 run-indexer:
 	go run ./services/indexer/cmd/indexer
