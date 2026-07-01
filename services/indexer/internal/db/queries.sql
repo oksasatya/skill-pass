@@ -94,3 +94,27 @@ RETURNING *;
 -- (chain-scoped) — used by reorg reconcile to roll back the confirmation window.
 -- name: DeleteCertificatesFromBlock :exec
 DELETE FROM certificates WHERE chain_id = $1 AND block_number >= $2;
+
+-- TrendByDay returns certificate counts bucketed by UTC day since the given timestamp.
+-- name: TrendByDay :many
+SELECT (date_trunc('day', issued_at AT TIME ZONE 'UTC'))::timestamptz AS bucket_start, count(*) AS cnt
+FROM certificates
+WHERE issued_at >= $1
+GROUP BY 1
+ORDER BY 1;
+
+-- TrendByWeek returns certificate counts bucketed by UTC ISO week since the given timestamp.
+-- name: TrendByWeek :many
+SELECT (date_trunc('week', issued_at AT TIME ZONE 'UTC'))::timestamptz AS bucket_start, count(*) AS cnt
+FROM certificates
+WHERE issued_at >= $1
+GROUP BY 1
+ORDER BY 1;
+
+-- TrendByMonth returns certificate counts bucketed by UTC month since the given timestamp.
+-- name: TrendByMonth :many
+SELECT (date_trunc('month', issued_at AT TIME ZONE 'UTC'))::timestamptz AS bucket_start, count(*) AS cnt
+FROM certificates
+WHERE issued_at >= $1
+GROUP BY 1
+ORDER BY 1;

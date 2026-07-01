@@ -303,6 +303,108 @@ func (q *Queries) SearchCertificatesByOwner(ctx context.Context, arg SearchCerti
 	return items, nil
 }
 
+const trendByDay = `-- name: TrendByDay :many
+SELECT (date_trunc('day', issued_at AT TIME ZONE 'UTC'))::timestamptz AS bucket_start, count(*) AS cnt
+FROM certificates
+WHERE issued_at >= $1
+GROUP BY 1
+ORDER BY 1
+`
+
+type TrendByDayRow struct {
+	BucketStart pgtype.Timestamptz
+	Cnt         int64
+}
+
+// TrendByDay returns certificate counts bucketed by UTC day since the given timestamp.
+func (q *Queries) TrendByDay(ctx context.Context, issuedAt pgtype.Timestamptz) ([]TrendByDayRow, error) {
+	rows, err := q.db.Query(ctx, trendByDay, issuedAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []TrendByDayRow
+	for rows.Next() {
+		var i TrendByDayRow
+		if err := rows.Scan(&i.BucketStart, &i.Cnt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const trendByMonth = `-- name: TrendByMonth :many
+SELECT (date_trunc('month', issued_at AT TIME ZONE 'UTC'))::timestamptz AS bucket_start, count(*) AS cnt
+FROM certificates
+WHERE issued_at >= $1
+GROUP BY 1
+ORDER BY 1
+`
+
+type TrendByMonthRow struct {
+	BucketStart pgtype.Timestamptz
+	Cnt         int64
+}
+
+// TrendByMonth returns certificate counts bucketed by UTC month since the given timestamp.
+func (q *Queries) TrendByMonth(ctx context.Context, issuedAt pgtype.Timestamptz) ([]TrendByMonthRow, error) {
+	rows, err := q.db.Query(ctx, trendByMonth, issuedAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []TrendByMonthRow
+	for rows.Next() {
+		var i TrendByMonthRow
+		if err := rows.Scan(&i.BucketStart, &i.Cnt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const trendByWeek = `-- name: TrendByWeek :many
+SELECT (date_trunc('week', issued_at AT TIME ZONE 'UTC'))::timestamptz AS bucket_start, count(*) AS cnt
+FROM certificates
+WHERE issued_at >= $1
+GROUP BY 1
+ORDER BY 1
+`
+
+type TrendByWeekRow struct {
+	BucketStart pgtype.Timestamptz
+	Cnt         int64
+}
+
+// TrendByWeek returns certificate counts bucketed by UTC ISO week since the given timestamp.
+func (q *Queries) TrendByWeek(ctx context.Context, issuedAt pgtype.Timestamptz) ([]TrendByWeekRow, error) {
+	rows, err := q.db.Query(ctx, trendByWeek, issuedAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []TrendByWeekRow
+	for rows.Next() {
+		var i TrendByWeekRow
+		if err := rows.Scan(&i.BucketStart, &i.Cnt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const upsertCertificate = `-- name: UpsertCertificate :one
 INSERT INTO certificates (
     token_id, owner_address, title, recipient_name, issuer_name,

@@ -484,6 +484,46 @@ func TestListHasMoreFalseOnLastPage(t *testing.T) {
 	}
 }
 
+// TestGetIssuanceTrend_BucketsByDay verifies day-bucketed counts come back sorted, with
+// only non-zero buckets present (zero-fill across the requested range is TrendService's
+// job — see Task 5 — not the repo's).
+func TestGetIssuanceTrend_BucketsByDay(t *testing.T) {
+	pool := startPostgres(t)
+	repo := postgres.NewCertificateRepo(pool)
+	ctx := context.Background()
+
+	day1 := makeCert("1")
+	day1.IssuedAt = time.Date(2026, 6, 29, 10, 0, 0, 0, time.UTC)
+	day1b := makeCertOwner("2", "0xabcdef1234567890abcdef1234567890abcdef12")
+	day1b.IssuedAt = time.Date(2026, 6, 29, 22, 0, 0, 0, time.UTC)
+	day3 := makeCertOwner("3", "0xabcdef1234567890abcdef1234567890abcdef12")
+	day3.IssuedAt = time.Date(2026, 7, 1, 8, 0, 0, 0, time.UTC)
+
+	for _, c := range []domain.Certificate{day1, day1b, day3} {
+		if err := repo.Upsert(ctx, c); err != nil {
+			t.Fatalf("upsert %s: %v", c.TokenID, err)
+		}
+	}
+
+	since := time.Date(2026, 6, 28, 0, 0, 0, 0, time.UTC)
+	points, err := repo.GetIssuanceTrend(ctx, usecase.TrendBucketDay, since)
+	if err != nil {
+		t.Fatalf("GetIssuanceTrend: %v", err)
+	}
+
+	// only buckets with >=1 row come back — day 06-30 has none and is absent (zero-fill is
+	// TrendService's job, tested in Task 5, not the repo's).
+	if len(points) != 2 {
+		t.Fatalf("got %d points, want 2 (06-29 and 07-01): %+v", len(points), points)
+	}
+	if points[0].Count != 2 {
+		t.Errorf("06-29 count = %d, want 2", points[0].Count)
+	}
+	if points[1].Count != 1 {
+		t.Errorf("07-01 count = %d, want 1", points[1].Count)
+	}
+}
+
 // TestDeleteFromBlock verifies DeleteFromBlock deletes certs at or above a boundary block.
 func TestDeleteFromBlock(t *testing.T) {
 	pool := startPostgres(t)

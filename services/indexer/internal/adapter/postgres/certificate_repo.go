@@ -145,6 +145,57 @@ func (r *CertificateRepo) DeleteFromBlock(ctx context.Context, chainID int64, bl
 	return nil
 }
 
+// GetIssuanceTrend returns raw (non-zero-filled) trend rows since the given time, dispatched
+// by bucket granularity — mirrors the dispatch() switch pattern used by List/Search above.
+// O(certs in range) via the issued_at index, then a Postgres GROUP BY aggregate.
+func (r *CertificateRepo) GetIssuanceTrend(ctx context.Context, bucket usecase.TrendBucket, since time.Time) ([]usecase.TrendPoint, error) {
+	sinceArg := pgtype.Timestamptz{Time: since.UTC(), Valid: true}
+
+	switch bucket {
+	case usecase.TrendBucketDay:
+		rows, err := r.queries.TrendByDay(ctx, sinceArg)
+		if err != nil {
+			return nil, fmt.Errorf("postgres.CertificateRepo.GetIssuanceTrend: %w", err)
+		}
+		return toTrendPoints(rows), nil
+	case usecase.TrendBucketWeek:
+		rows, err := r.queries.TrendByWeek(ctx, sinceArg)
+		if err != nil {
+			return nil, fmt.Errorf("postgres.CertificateRepo.GetIssuanceTrend: %w", err)
+		}
+		return toTrendPoints(rows), nil
+	case usecase.TrendBucketMonth:
+		rows, err := r.queries.TrendByMonth(ctx, sinceArg)
+		if err != nil {
+			return nil, fmt.Errorf("postgres.CertificateRepo.GetIssuanceTrend: %w", err)
+		}
+		return toTrendPoints(rows), nil
+	default:
+		return nil, fmt.Errorf("postgres.CertificateRepo.GetIssuanceTrend: unknown bucket %d", bucket)
+	}
+}
+
+// trendRow is satisfied by every sqlc-generated TrendByXRow (structurally identical,
+// distinct generated types — Go generics bridge them without repeating the mapping 3x).
+type trendRow interface {
+	db.TrendByDayRow | db.TrendByWeekRow | db.TrendByMonthRow
+}
+
+func toTrendPoints[R trendRow](rows []R) []usecase.TrendPoint {
+	points := make([]usecase.TrendPoint, 0, len(rows))
+	for _, row := range rows {
+		switch v := any(row).(type) {
+		case db.TrendByDayRow:
+			points = append(points, usecase.TrendPoint{BucketStart: v.BucketStart.Time, Count: v.Cnt})
+		case db.TrendByWeekRow:
+			points = append(points, usecase.TrendPoint{BucketStart: v.BucketStart.Time, Count: v.Cnt})
+		case db.TrendByMonthRow:
+			points = append(points, usecase.TrendPoint{BucketStart: v.BucketStart.Time, Count: v.Cnt})
+		}
+	}
+	return points
+}
+
 // --- helpers ---
 
 // normalizeOwner lowercases and validates the owner filter.
