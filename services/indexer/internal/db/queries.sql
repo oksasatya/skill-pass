@@ -118,3 +118,22 @@ FROM certificates
 WHERE issued_at >= $1
 GROUP BY 1
 ORDER BY 1;
+
+-- InsertWebhookOutbox durably records a certificate-issued event as owing a webhook
+-- delivery, deduped by (chain_id, tx_hash, token_id) -- ON CONFLICT DO NOTHING means a
+-- duplicate call returns zero rows (:one then surfaces pgx.ErrNoRows, which the repo
+-- method translates to isNew=false, not an error).
+-- name: InsertWebhookOutbox :one
+INSERT INTO webhook_outbox (chain_id, tx_hash, token_id, payload)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (chain_id, tx_hash, token_id) DO NOTHING
+RETURNING id;
+
+-- ListUnenqueuedWebhookOutbox returns outbox rows not yet handed to the task queue,
+-- oldest first -- used by both the fast-path enqueue and the webhook:sweep backstop.
+-- name: ListUnenqueuedWebhookOutbox :many
+SELECT id, payload FROM webhook_outbox WHERE enqueued_at IS NULL ORDER BY id LIMIT $1;
+
+-- MarkWebhookOutboxEnqueued marks an outbox row as handed to the task queue.
+-- name: MarkWebhookOutboxEnqueued :exec
+UPDATE webhook_outbox SET enqueued_at = now() WHERE id = $1;

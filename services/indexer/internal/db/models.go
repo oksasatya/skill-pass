@@ -33,3 +33,13 @@ type IndexerState struct {
 	LastProcessedHash  string
 	UpdatedAt          pgtype.Timestamptz
 }
+
+type WebhookOutbox struct {
+	ID         int64
+	ChainID    int64
+	TxHash     string
+	TokenID    string
+	Payload    []byte
+	EnqueuedAt pgtype.Timestamptz
+	CreatedAt  pgtype.Timestamptz
+}

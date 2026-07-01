@@ -573,3 +573,72 @@ func TestDeleteFromBlock(t *testing.T) {
 		t.Fatalf("token 3 (above boundary) should be deleted, got err=%v", err)
 	}
 }
+
+func TestInsertWebhookOutbox_DedupesByChainTxToken(t *testing.T) {
+	pool := startPostgres(t)
+	repo := postgres.NewCertificateRepo(pool)
+	ctx := context.Background()
+
+	payload := []byte(`{"tokenId":"1"}`)
+
+	id1, isNew1, err := repo.InsertWebhookOutbox(ctx, 31337, "0xabc", "1", payload)
+	if err != nil {
+		t.Fatalf("first insert: %v", err)
+	}
+	if !isNew1 {
+		t.Fatal("first insert should be new")
+	}
+	if id1 == 0 {
+		t.Fatal("expected a non-zero id")
+	}
+
+	id2, isNew2, err := repo.InsertWebhookOutbox(ctx, 31337, "0xabc", "1", payload)
+	if err != nil {
+		t.Fatalf("second (duplicate) insert: %v", err)
+	}
+	if isNew2 {
+		t.Fatal("second insert of the same (chain_id, tx_hash, token_id) must not be new")
+	}
+	if id2 != 0 {
+		t.Fatal("duplicate insert should return a zero id (nothing was returned)")
+	}
+
+	// A DIFFERENT token_id sharing the same tx_hash (hypothetical batch-mint-via-multicall
+	// in one transaction) must still be treated as a genuinely new event, not collapsed.
+	id3, isNew3, err := repo.InsertWebhookOutbox(ctx, 31337, "0xabc", "2", payload)
+	if err != nil {
+		t.Fatalf("different token_id insert: %v", err)
+	}
+	if !isNew3 {
+		t.Fatal("a different token_id sharing the same tx_hash must be treated as new")
+	}
+	if id3 == id1 {
+		t.Fatal("expected a distinct id for a distinct token_id")
+	}
+}
+
+func TestListUnenqueuedWebhookOutbox_ReturnsOnlyUnmarked(t *testing.T) {
+	pool := startPostgres(t)
+	repo := postgres.NewCertificateRepo(pool)
+	ctx := context.Background()
+
+	id1, _, err := repo.InsertWebhookOutbox(ctx, 31337, "0xabc", "1", []byte(`{}`))
+	if err != nil {
+		t.Fatalf("insert 1: %v", err)
+	}
+	if _, _, err := repo.InsertWebhookOutbox(ctx, 31337, "0xdef", "2", []byte(`{}`)); err != nil {
+		t.Fatalf("insert 2: %v", err)
+	}
+
+	if err := repo.MarkWebhookOutboxEnqueued(ctx, id1); err != nil {
+		t.Fatalf("mark enqueued: %v", err)
+	}
+
+	entries, err := repo.ListUnenqueuedWebhookOutbox(ctx, 10)
+	if err != nil {
+		t.Fatalf("list unenqueued: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("got %d unenqueued entries, want 1 (id1 was marked enqueued)", len(entries))
+	}
+}

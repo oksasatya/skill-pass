@@ -85,6 +85,36 @@ func (q *Queries) GetIndexerState(ctx context.Context) (IndexerState, error) {
 	return i, err
 }
 
+const insertWebhookOutbox = `-- name: InsertWebhookOutbox :one
+INSERT INTO webhook_outbox (chain_id, tx_hash, token_id, payload)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (chain_id, tx_hash, token_id) DO NOTHING
+RETURNING id
+`
+
+type InsertWebhookOutboxParams struct {
+	ChainID int64
+	TxHash  string
+	TokenID string
+	Payload []byte
+}
+
+// InsertWebhookOutbox durably records a certificate-issued event as owing a webhook
+// delivery, deduped by (chain_id, tx_hash, token_id) -- ON CONFLICT DO NOTHING means a
+// duplicate call returns zero rows (:one then surfaces pgx.ErrNoRows, which the repo
+// method translates to isNew=false, not an error).
+func (q *Queries) InsertWebhookOutbox(ctx context.Context, arg InsertWebhookOutboxParams) (int64, error) {
+	row := q.db.QueryRow(ctx, insertWebhookOutbox,
+		arg.ChainID,
+		arg.TxHash,
+		arg.TokenID,
+		arg.Payload,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
 const listCertificates = `-- name: ListCertificates :many
 SELECT token_id, owner_address, title, recipient_name, issuer_name, description, metadata_uri, issued_at, chain_id, tx_hash, log_index, block_number, block_hash, created_at, updated_at FROM certificates
 WHERE ($1::numeric IS NULL OR token_id < $1)
@@ -185,6 +215,47 @@ func (q *Queries) ListCertificatesByOwner(ctx context.Context, arg ListCertifica
 		return nil, err
 	}
 	return items, nil
+}
+
+const listUnenqueuedWebhookOutbox = `-- name: ListUnenqueuedWebhookOutbox :many
+SELECT id, payload FROM webhook_outbox WHERE enqueued_at IS NULL ORDER BY id LIMIT $1
+`
+
+type ListUnenqueuedWebhookOutboxRow struct {
+	ID      int64
+	Payload []byte
+}
+
+// ListUnenqueuedWebhookOutbox returns outbox rows not yet handed to the task queue,
+// oldest first -- used by both the fast-path enqueue and the webhook:sweep backstop.
+func (q *Queries) ListUnenqueuedWebhookOutbox(ctx context.Context, limit int32) ([]ListUnenqueuedWebhookOutboxRow, error) {
+	rows, err := q.db.Query(ctx, listUnenqueuedWebhookOutbox, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListUnenqueuedWebhookOutboxRow
+	for rows.Next() {
+		var i ListUnenqueuedWebhookOutboxRow
+		if err := rows.Scan(&i.ID, &i.Payload); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const markWebhookOutboxEnqueued = `-- name: MarkWebhookOutboxEnqueued :exec
+UPDATE webhook_outbox SET enqueued_at = now() WHERE id = $1
+`
+
+// MarkWebhookOutboxEnqueued marks an outbox row as handed to the task queue.
+func (q *Queries) MarkWebhookOutboxEnqueued(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, markWebhookOutboxEnqueued, id)
+	return err
 }
 
 const searchCertificates = `-- name: SearchCertificates :many

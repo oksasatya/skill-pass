@@ -52,6 +52,20 @@ func (f *fakeRepo) GetIssuanceTrend(_ context.Context, _ usecase.TrendBucket, _ 
 	return nil, nil
 }
 
+// InsertWebhookOutbox, ListUnenqueuedWebhookOutbox, MarkWebhookOutboxEnqueued are unused by
+// gRPC server tests; stubbed only to satisfy usecase.CertificateRepo.
+func (f *fakeRepo) InsertWebhookOutbox(_ context.Context, _ int64, _, _ string, _ []byte) (int64, bool, error) {
+	return 0, false, nil
+}
+
+func (f *fakeRepo) ListUnenqueuedWebhookOutbox(_ context.Context, _ int) ([]usecase.WebhookOutboxEntry, error) {
+	return nil, nil
+}
+
+func (f *fakeRepo) MarkWebhookOutboxEnqueued(_ context.Context, _ int64) error {
+	return nil
+}
+
 type fakeEventSource struct {
 	head    uint64
 	headErr error

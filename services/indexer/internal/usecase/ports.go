@@ -23,6 +23,12 @@ type ListParams struct {
 	Limit  int    // page size; <=0 → adapter applies a sane default
 }
 
+// WebhookOutboxEntry is one durable "we owe a webhook" record, read back for delivery.
+type WebhookOutboxEntry struct {
+	ID      int64
+	Payload []byte
+}
+
 // CertificateRepo is the read-model + state store (Postgres adapter implements in T4).
 type CertificateRepo interface {
 	// Upsert inserts or updates a certificate; idempotent on token_id.
@@ -50,6 +56,21 @@ type CertificateRepo interface {
 	// GetIssuanceTrend returns raw (non-zero-filled) trend rows since the given time,
 	// bucketed by day/week/month. O(certs in range) via the issued_at index.
 	GetIssuanceTrend(ctx context.Context, bucket TrendBucket, since time.Time) ([]TrendPoint, error)
+
+	// InsertWebhookOutbox durably records that chainID/txHash/tokenID owes a webhook
+	// delivery, deduped by that triple — the identity of the on-chain event itself, stable
+	// across a reorg re-mining the same transaction into a different block (unlike
+	// log_index, which is block-relative). isNew is true iff this call created the row;
+	// false means a webhook was already recorded for this exact event and the caller must
+	// not enqueue again. id is only meaningful when isNew is true.
+	InsertWebhookOutbox(ctx context.Context, chainID int64, txHash, tokenID string, payload []byte) (id int64, isNew bool, err error)
+
+	// ListUnenqueuedWebhookOutbox returns up to limit outbox rows not yet marked enqueued,
+	// oldest first — used by both the fast-path enqueue and the webhook:sweep backstop.
+	ListUnenqueuedWebhookOutbox(ctx context.Context, limit int) ([]WebhookOutboxEntry, error)
+
+	// MarkWebhookOutboxEnqueued marks an outbox row as handed to the task queue.
+	MarkWebhookOutboxEnqueued(ctx context.Context, id int64) error
 }
 
 // EventSource is the chain read side (ethclient adapter implements in T5).

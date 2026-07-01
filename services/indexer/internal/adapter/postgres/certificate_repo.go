@@ -177,6 +177,46 @@ func (r *CertificateRepo) GetIssuanceTrend(ctx context.Context, bucket usecase.T
 	}
 }
 
+// InsertWebhookOutbox durably records chainID/txHash/tokenID as owing a webhook delivery.
+// O(1) via the (chain_id, tx_hash, token_id) unique index.
+func (r *CertificateRepo) InsertWebhookOutbox(ctx context.Context, chainID int64, txHash, tokenID string, payload []byte) (int64, bool, error) {
+	id, err := r.queries.InsertWebhookOutbox(ctx, db.InsertWebhookOutboxParams{
+		ChainID: chainID,
+		TxHash:  txHash,
+		TokenID: tokenID,
+		Payload: payload,
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return 0, false, nil // already recorded for this exact event -- not an error
+		}
+		return 0, false, fmt.Errorf("postgres.CertificateRepo.InsertWebhookOutbox: %w", err)
+	}
+	return id, true, nil
+}
+
+// ListUnenqueuedWebhookOutbox returns up to limit outbox rows not yet enqueued.
+// O(limit) via idx_webhook_outbox_unenqueued.
+func (r *CertificateRepo) ListUnenqueuedWebhookOutbox(ctx context.Context, limit int) ([]usecase.WebhookOutboxEntry, error) {
+	rows, err := r.queries.ListUnenqueuedWebhookOutbox(ctx, int32(limit)) //nolint:gosec // limit is a small internal constant
+	if err != nil {
+		return nil, fmt.Errorf("postgres.CertificateRepo.ListUnenqueuedWebhookOutbox: %w", err)
+	}
+	entries := make([]usecase.WebhookOutboxEntry, 0, len(rows))
+	for _, row := range rows {
+		entries = append(entries, usecase.WebhookOutboxEntry{ID: row.ID, Payload: row.Payload})
+	}
+	return entries, nil
+}
+
+// MarkWebhookOutboxEnqueued marks an outbox row as handed to the task queue.
+func (r *CertificateRepo) MarkWebhookOutboxEnqueued(ctx context.Context, id int64) error {
+	if err := r.queries.MarkWebhookOutboxEnqueued(ctx, id); err != nil {
+		return fmt.Errorf("postgres.CertificateRepo.MarkWebhookOutboxEnqueued: %w", err)
+	}
+	return nil
+}
+
 // trendRow is satisfied by every sqlc-generated TrendByXRow (structurally identical,
 // distinct generated types — Go generics bridge them without repeating the mapping 3x).
 type trendRow interface {

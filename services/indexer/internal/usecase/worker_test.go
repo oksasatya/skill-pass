@@ -105,6 +105,20 @@ func (r *fakeRepo) GetIssuanceTrend(_ context.Context, _ usecase.TrendBucket, _ 
 	return nil, nil
 }
 
+// InsertWebhookOutbox, ListUnenqueuedWebhookOutbox, MarkWebhookOutboxEnqueued are unused by
+// worker tests; stubbed only to satisfy usecase.CertificateRepo.
+func (r *fakeRepo) InsertWebhookOutbox(_ context.Context, _ int64, _, _ string, _ []byte) (int64, bool, error) {
+	return 0, false, nil
+}
+
+func (r *fakeRepo) ListUnenqueuedWebhookOutbox(_ context.Context, _ int) ([]usecase.WebhookOutboxEntry, error) {
+	return nil, nil
+}
+
+func (r *fakeRepo) MarkWebhookOutboxEnqueued(_ context.Context, _ int64) error {
+	return nil
+}
+
 // helpers
 
 func mustAddr(s string) domain.Address {
