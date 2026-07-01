@@ -450,7 +450,7 @@ git commit -m "feat(indexer): reorg reconcile — canonical checkpoint hash + bo
 
 ## Phase 5 — Certificate issuance trend (data metrics)
 
-### Task 1: Migration — index on `issued_at`
+### Task 3: Migration — index on `issued_at`
 
 **TDD: no** (migration — infra, not logic).
 
@@ -481,7 +481,7 @@ git commit -m "feat(indexer): add issued_at index for the Phase 5 trend query"
 
 ---
 
-### Task 2: Proto — `GetIssuanceTrend` RPC + messages
+### Task 4: Proto — `GetIssuanceTrend` RPC + messages
 
 **TDD: no** (codegen).
 
@@ -529,7 +529,7 @@ Expected: `proto/gen/go/skillpass/cert/v1/certificate.pb.go` and `certificate_gr
 - [ ] **Step 3: Verify it compiles**
 
 Run: `go build ./proto/...`
-Expected: clean (note: `CertificateQueryServer` implementations — `adapter/grpc.Server` — will NOT yet satisfy the interface until Task 5; that's expected and fixed there. If your Go toolchain compiles `proto/...` in isolation this step passes; the full-module build is re-verified at the end of Task 5.)
+Expected: clean (note: `CertificateQueryServer` implementations — `adapter/grpc.Server` — will NOT yet satisfy the interface until Task 7; that's expected and fixed there. If your Go toolchain compiles `proto/...` in isolation this step passes; the full-module build is re-verified at the end of Task 7.)
 
 - [ ] **Step 4: Commit**
 
@@ -540,7 +540,7 @@ git commit -m "feat(proto): GetIssuanceTrend RPC — bucketed certificate-issuan
 
 ---
 
-### Task 3: `usecase` trend types — bucket alignment, zero-fill, range presets, `TrendService`
+### Task 5: `usecase` trend types — bucket alignment, zero-fill, range presets, `TrendService`
 
 **TDD: yes** — pure, input→output logic; exactly the case TDD is for.
 
@@ -551,7 +551,7 @@ git commit -m "feat(proto): GetIssuanceTrend RPC — bucketed certificate-issuan
 
 **Interfaces:**
 - Produces: `usecase.TrendBucket` (`TrendBucketDay`/`Week`/`Month`), `usecase.TrendPoint{BucketStart time.Time; Count int64}`, `usecase.RangePresetToSince(bucket, preset string, now time.Time) (time.Time, error)`, `usecase.AllowedPresets() map[TrendBucket]map[string]int`, `usecase.AlignedBuckets(bucket, since, now time.Time) []time.Time`, `usecase.ZeroFillTrend(expected []time.Time, rows []TrendPoint) []TrendPoint`, `usecase.NewTrendService(repo CertificateRepo, chainID int64) *TrendService` with methods `GetTrend(ctx, bucket, since time.Time, preset string) ([]TrendPoint, error)` and `RefreshCache(ctx, bucket, since time.Time, preset string) ([]TrendPoint, error)` and `SetCache(cache TrendCache)`.
-- Consumes: nothing new from other tasks yet (Task 4 provides the real `CertificateRepo.GetIssuanceTrend`; this task's tests use a fake).
+- Consumes: nothing new from other tasks yet (Task 6 provides the real `CertificateRepo.GetIssuanceTrend`; this task's tests use a fake).
 
 - [ ] **Step 1: Add the port additions**
 
@@ -944,11 +944,11 @@ git add services/indexer/internal/usecase/ports.go services/indexer/internal/use
 git commit -m "feat(indexer): TrendService — bucket alignment, zero-fill, range presets, optional cache"
 ```
 
-**Anti-patterns to avoid:** don't interpolate the bucket into a raw SQL string (Task 4 dispatches via a Go switch instead) — that's an unnecessary dynamic-SQL smell for a fully enumerable value. Don't skip zero-filling — a frontend consumer should never have to gap-fill missing days itself.
+**Anti-patterns to avoid:** don't interpolate the bucket into a raw SQL string (Task 6 dispatches via a Go switch instead) — that's an unnecessary dynamic-SQL smell for a fully enumerable value. Don't skip zero-filling — a frontend consumer should never have to gap-fill missing days itself.
 
 ---
 
-### Task 4: SQL trend queries + `CertificateRepo.GetIssuanceTrend`
+### Task 6: SQL trend queries + `CertificateRepo.GetIssuanceTrend`
 
 **TDD: yes** — integration test against real Postgres (testcontainers), the existing convention for this repo.
 
@@ -958,7 +958,7 @@ git commit -m "feat(indexer): TrendService — bucket alignment, zero-fill, rang
 - Modify: `services/indexer/internal/adapter/postgres/certificate_repo_test.go`
 
 **Interfaces:**
-- Consumes: `usecase.TrendBucket`, `usecase.TrendPoint` from Task 3.
+- Consumes: `usecase.TrendBucket`, `usecase.TrendPoint` from Task 5.
 - Produces: `(*CertificateRepo).GetIssuanceTrend(ctx, bucket usecase.TrendBucket, since time.Time) ([]usecase.TrendPoint, error)` satisfying the port.
 
 - [ ] **Step 1: Add the three bucket queries**
@@ -1026,7 +1026,7 @@ func TestGetIssuanceTrend_BucketsByDay(t *testing.T) {
 	}
 
 	// only buckets with >=1 row come back — day 06-30 has none and is absent (zero-fill is
-	// TrendService's job, tested in Task 3, not the repo's).
+	// TrendService's job, tested in Task 5, not the repo's).
 	if len(points) != 2 {
 		t.Fatalf("got %d points, want 2 (06-29 and 07-01): %+v", len(points), points)
 	}
@@ -1113,7 +1113,7 @@ Expected: PASS — new trend test AND all pre-existing repo tests.
 - [ ] **Step 7: Full verify + commit**
 
 Run: `go build ./... && go vet ./... && gofmt -l services/indexer && go test ./services/indexer/... -race -cover`
-Expected: clean, all green. (The gRPC server still won't build — expected until Task 5.)
+Expected: clean, all green. (The gRPC server still won't build — expected until Task 7.)
 
 ```bash
 git add services/indexer/internal/db/queries.sql services/indexer/internal/db/queries.sql.go services/indexer/internal/adapter/postgres/certificate_repo.go services/indexer/internal/adapter/postgres/certificate_repo_test.go
@@ -1122,7 +1122,7 @@ git commit -m "feat(indexer): CertificateRepo.GetIssuanceTrend — day/week/mont
 
 ---
 
-### Task 5: gRPC handler `GetIssuanceTrend` + wire `TrendService` into `Server`
+### Task 7: gRPC handler `GetIssuanceTrend` + wire `TrendService` into `Server`
 
 **TDD: yes** for the bucket/preset validation mapping (mirrors the existing `errEmptyTokenID` pattern); the proto-mapping glue is thin but is exercised by the same tests.
 
@@ -1132,7 +1132,7 @@ git commit -m "feat(indexer): CertificateRepo.GetIssuanceTrend — day/week/mont
 - Modify: `services/indexer/cmd/indexer/main.go`
 
 **Interfaces:**
-- Consumes: `usecase.TrendService`, `usecase.RangePresetToSince`, `usecase.TrendBucket` from Task 3.
+- Consumes: `usecase.TrendService`, `usecase.RangePresetToSince`, `usecase.TrendBucket` from Task 5.
 - Produces: `Server` gains a `trend *usecase.TrendService` field; `NewServer` signature grows to `NewServer(repo usecase.CertificateRepo, src usecase.EventSource, sub usecase.EventSubscriber, trend *usecase.TrendService, log *slog.Logger) *Server`.
 
 - [ ] **Step 1: Extend `dialBufconn` and write the failing tests**
@@ -1331,7 +1331,7 @@ git commit -m "feat(indexer): GetIssuanceTrend gRPC handler, wire TrendService i
 
 ---
 
-### Task 6: Gateway REST — `GET /stats/trend`
+### Task 8: Gateway REST — `GET /stats/trend`
 
 **TDD: yes** for query-param validation/mapping (mirrors `certificates.go`'s `parsePageSize`/`isValidTokenID` pattern); **no** for the thin wiring, verified by build + the same test file's happy-path case.
 
@@ -1341,7 +1341,7 @@ git commit -m "feat(indexer): GetIssuanceTrend gRPC handler, wire TrendService i
 - Modify: `services/gateway/internal/httpapi/router.go`
 
 **Interfaces:**
-- Consumes: `certv1.CertificateQueryClient.GetIssuanceTrend` (already on the gRPC-generated interface `Deps.Cert` once Task 5's proto regen lands).
+- Consumes: `certv1.CertificateQueryClient.GetIssuanceTrend` (already on the gRPC-generated interface `Deps.Cert` once Task 7's proto regen lands).
 - Produces: `GetIssuanceTrend(d Deps) http.HandlerFunc`, wired at `GET /stats/trend`.
 
 - [ ] **Step 1: Write the failing test**
@@ -1499,7 +1499,7 @@ git commit -m "feat(gateway): GET /stats/trend — REST wrapper over GetIssuance
 
 ## Phase 6 — Redis + asynq (issuance trend cache)
 
-### Task 1: Add dependencies + config
+### Task 9: Add dependencies + config
 
 **TDD: no** (dependency/config wiring).
 
@@ -1535,7 +1535,7 @@ And in `Load()`, after the existing required-var checks:
 - [ ] **Step 3: Verify + commit**
 
 Run: `go build ./... && go vet ./...`
-Expected: clean (config change alone doesn't break the build; `RedisAddr` is unused until Task 5, which is fine — Go doesn't flag unused struct fields).
+Expected: clean (config change alone doesn't break the build; `RedisAddr` is unused until Task 13, which is fine — Go doesn't flag unused struct fields).
 
 ```bash
 git add go.mod go.sum services/indexer/internal/config/config.go
@@ -1544,7 +1544,7 @@ git commit -m "feat(indexer): add Redis + asynq dependencies, REDIS_ADDR config"
 
 ---
 
-### Task 2: Redis-backed `TrendCache`
+### Task 10: Redis-backed `TrendCache`
 
 **TDD: yes** — cache hit/miss/marshal-error paths are easy to get subtly wrong.
 
@@ -1553,7 +1553,7 @@ git commit -m "feat(indexer): add Redis + asynq dependencies, REDIS_ADDR config"
 - Create: `services/indexer/internal/adapter/cache/redis_trend_cache_test.go`
 
 **Interfaces:**
-- Consumes: `usecase.TrendCache`, `usecase.TrendPoint` from Phase 5 Task 3.
+- Consumes: `usecase.TrendCache`, `usecase.TrendPoint` from Task 5.
 - Produces: `cache.NewRedisTrendCache(client *redis.Client) *RedisTrendCache` satisfying `usecase.TrendCache`.
 
 - [ ] **Step 1: Write the failing test**
@@ -1705,7 +1705,7 @@ git commit -m "feat(indexer): Redis-backed TrendCache"
 
 ---
 
-### Task 3: asynq refresh job — task type, constructor, handler
+### Task 11: asynq refresh job — task type, constructor, handler
 
 **TDD: yes** — the handler's "iterate every preset combination" loop is real logic worth a fake-based test.
 
@@ -1883,7 +1883,7 @@ git commit -m "feat(indexer): asynq refresh-trend-cache task + handler"
 
 ---
 
-### Task 4: Wire `TaskEnqueuer` into the Worker (debounced enqueue after upsert)
+### Task 12: Wire `TaskEnqueuer` into the Worker (debounced enqueue after upsert)
 
 **TDD: yes** — nil-safety and the "enqueue after every successful upsert" trigger are exactly the class of thing worth a regression test (mirrors the existing `EventPublisher`/`SetPublisher` test pattern from BE-2).
 
@@ -2099,7 +2099,7 @@ git commit -m "feat(indexer): debounced trend-refresh enqueue from the ingest Wo
 
 ---
 
-### Task 5: Composition root — Redis, asynq server/scheduler, cache-wired `TrendService`
+### Task 13: Composition root — Redis, asynq server/scheduler, cache-wired `TrendService`
 
 **TDD: no** (composition-root wiring — verify by running + the existing test suite continuing to pass).
 
@@ -2246,9 +2246,9 @@ Expected: clean.
 Run: `go build ./... && go vet ./... && gofmt -l services/indexer && go test ./services/indexer/... -race -cover`
 Expected: clean, all green (this doesn't require a live Redis — nothing in the existing unit/integration test suite exercises the composition root directly; `cmd/indexer` has 0% test coverage already, consistent with the rest of this codebase's `cmd/` packages).
 
-- [ ] **Step 4: Manual smoke test against the dev stack (see Task 6 for docker-compose)**
+- [ ] **Step 4: Manual smoke test against the dev stack (see Task 14 for docker-compose)**
 
-Deferred to Task 6, once Redis is in `docker-compose.yml` — running `cmd/indexer` locally right now would fail fast on `config.Load()`'s new required `REDIS_ADDR` check, which is expected.
+Deferred to Task 14, once Redis is in `docker-compose.yml` — running `cmd/indexer` locally right now would fail fast on `config.Load()`'s new required `REDIS_ADDR` check, which is expected.
 
 - [ ] **Step 5: Commit**
 
@@ -2259,7 +2259,7 @@ git commit -m "feat(indexer): wire Redis + asynq server/scheduler into the compo
 
 ---
 
-### Task 6: docker-compose + Makefile Redis wiring
+### Task 14: docker-compose + Makefile Redis wiring
 
 **TDD: no** (infra).
 
