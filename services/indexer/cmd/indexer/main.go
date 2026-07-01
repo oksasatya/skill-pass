@@ -187,6 +187,10 @@ func runConcurrently(ctx context.Context, svc runtimeServices, addr string, log 
 
 	g.Go(func() error {
 		<-gCtx.Done()
+		// asynqServer.Run/scheduler.Run each install their own internal signal.Notify
+		// handler (asynq's own SIGTERM/SIGINT/SIGTSTP handling) alongside this ctx-driven
+		// shutdown. Both paths call the same idempotent Shutdown/Stop methods, so calling
+		// them again here is a safe no-op if asynq's own handler already fired first.
 		svc.grpcServer.GracefulStop()
 		svc.asynqServer.Shutdown()
 		svc.scheduler.Shutdown()
