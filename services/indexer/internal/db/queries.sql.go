@@ -304,7 +304,7 @@ func (q *Queries) SearchCertificatesByOwner(ctx context.Context, arg SearchCerti
 }
 
 const trendByDay = `-- name: TrendByDay :many
-SELECT (date_trunc('day', issued_at AT TIME ZONE 'UTC'))::timestamptz AS bucket_start, count(*) AS cnt
+SELECT (date_trunc('day', issued_at AT TIME ZONE 'UTC') AT TIME ZONE 'UTC')::timestamptz AS bucket_start, count(*) AS cnt
 FROM certificates
 WHERE issued_at >= $1
 GROUP BY 1
@@ -338,7 +338,7 @@ func (q *Queries) TrendByDay(ctx context.Context, issuedAt pgtype.Timestamptz) (
 }
 
 const trendByMonth = `-- name: TrendByMonth :many
-SELECT (date_trunc('month', issued_at AT TIME ZONE 'UTC'))::timestamptz AS bucket_start, count(*) AS cnt
+SELECT (date_trunc('month', issued_at AT TIME ZONE 'UTC') AT TIME ZONE 'UTC')::timestamptz AS bucket_start, count(*) AS cnt
 FROM certificates
 WHERE issued_at >= $1
 GROUP BY 1
@@ -372,7 +372,7 @@ func (q *Queries) TrendByMonth(ctx context.Context, issuedAt pgtype.Timestamptz)
 }
 
 const trendByWeek = `-- name: TrendByWeek :many
-SELECT (date_trunc('week', issued_at AT TIME ZONE 'UTC'))::timestamptz AS bucket_start, count(*) AS cnt
+SELECT (date_trunc('week', issued_at AT TIME ZONE 'UTC') AT TIME ZONE 'UTC')::timestamptz AS bucket_start, count(*) AS cnt
 FROM certificates
 WHERE issued_at >= $1
 GROUP BY 1

@@ -33,7 +33,11 @@ func NewEnqueuer(client *asynq.Client) *Enqueuer {
 func (e *Enqueuer) EnqueueUnique(ctx context.Context, taskType, taskID string) error {
 	task := asynq.NewTask(taskType, nil)
 	_, err := e.client.EnqueueContext(ctx, task, asynq.TaskID(taskID), asynq.Unique(uniqueTTL))
-	if errors.Is(err, asynq.ErrDuplicateTask) {
+	// Both indicate an equivalent task is already pending/active: the common case is
+	// ErrDuplicateTask (the Unique key is still held); ErrTaskIDConflict is the narrow
+	// window where the unique key expired but the fixed TaskID row is still present.
+	// Either way there's nothing new for the caller to do -- absorb both as a no-op.
+	if errors.Is(err, asynq.ErrDuplicateTask) || errors.Is(err, asynq.ErrTaskIDConflict) {
 		return nil
 	}
 	if err != nil {

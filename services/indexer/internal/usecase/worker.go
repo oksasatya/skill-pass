@@ -189,6 +189,11 @@ func (w *Worker) reconcile(ctx context.Context) error {
 		rewindTo = state.LastProcessedBlock - reorgWindow
 	}
 
+	// Note: this does not proactively invalidate the trend cache (Phase 6). If the
+	// canonical replacement blocks re-add the same certificates, processLog's own
+	// EnqueueUnique call refreshes it; if a reorg net-removes certificates with no
+	// replacement re-ingest, the cache stays stale until the 15-min cron backstop or
+	// the cache's own TTL heals it -- an accepted tradeoff per the Phase 4 design spec.
 	if err := w.repo.DeleteFromBlock(ctx, w.cfg.ChainID, rewindTo+1); err != nil {
 		return fmt.Errorf("delete from block %d: %w", rewindTo+1, err)
 	}

@@ -522,6 +522,19 @@ func TestGetIssuanceTrend_BucketsByDay(t *testing.T) {
 	if points[1].Count != 1 {
 		t.Errorf("07-01 count = %d, want 1", points[1].Count)
 	}
+
+	// BucketStart must land exactly on UTC day boundaries regardless of the Postgres
+	// session's TimeZone GUC -- a regression here (e.g. reintroducing a bare ::timestamptz
+	// cast on a naive value) would silently shift every bucket by the session's UTC offset,
+	// which then fails to match TrendService's UTC-aligned merge keys (see trend.go).
+	wantDay1 := time.Date(2026, 6, 29, 0, 0, 0, 0, time.UTC)
+	wantDay3 := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
+	if !points[0].BucketStart.Equal(wantDay1) {
+		t.Errorf("06-29 BucketStart = %v, want %v", points[0].BucketStart, wantDay1)
+	}
+	if !points[1].BucketStart.Equal(wantDay3) {
+		t.Errorf("07-01 BucketStart = %v, want %v", points[1].BucketStart, wantDay3)
+	}
 }
 
 // TestDeleteFromBlock verifies DeleteFromBlock deletes certs at or above a boundary block.
