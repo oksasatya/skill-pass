@@ -23,6 +23,7 @@ const (
 	CertificateQuery_ListCertificates_FullMethodName        = "/skillpass.cert.v1.CertificateQuery/ListCertificates"
 	CertificateQuery_StreamCertificateEvents_FullMethodName = "/skillpass.cert.v1.CertificateQuery/StreamCertificateEvents"
 	CertificateQuery_GetIndexerStatus_FullMethodName        = "/skillpass.cert.v1.CertificateQuery/GetIndexerStatus"
+	CertificateQuery_GetIssuanceTrend_FullMethodName        = "/skillpass.cert.v1.CertificateQuery/GetIssuanceTrend"
 )
 
 // CertificateQueryClient is the client API for CertificateQuery service.
@@ -36,6 +37,7 @@ type CertificateQueryClient interface {
 	ListCertificates(ctx context.Context, in *ListCertificatesRequest, opts ...grpc.CallOption) (*ListCertificatesResponse, error)
 	StreamCertificateEvents(ctx context.Context, in *StreamCertificateEventsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[CertificateEvent], error)
 	GetIndexerStatus(ctx context.Context, in *GetIndexerStatusRequest, opts ...grpc.CallOption) (*GetIndexerStatusResponse, error)
+	GetIssuanceTrend(ctx context.Context, in *GetIssuanceTrendRequest, opts ...grpc.CallOption) (*GetIssuanceTrendResponse, error)
 }
 
 type certificateQueryClient struct {
@@ -95,6 +97,16 @@ func (c *certificateQueryClient) GetIndexerStatus(ctx context.Context, in *GetIn
 	return out, nil
 }
 
+func (c *certificateQueryClient) GetIssuanceTrend(ctx context.Context, in *GetIssuanceTrendRequest, opts ...grpc.CallOption) (*GetIssuanceTrendResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetIssuanceTrendResponse)
+	err := c.cc.Invoke(ctx, CertificateQuery_GetIssuanceTrend_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // CertificateQueryServer is the server API for CertificateQuery service.
 // All implementations should embed UnimplementedCertificateQueryServer
 // for forward compatibility.
@@ -106,6 +118,7 @@ type CertificateQueryServer interface {
 	ListCertificates(context.Context, *ListCertificatesRequest) (*ListCertificatesResponse, error)
 	StreamCertificateEvents(*StreamCertificateEventsRequest, grpc.ServerStreamingServer[CertificateEvent]) error
 	GetIndexerStatus(context.Context, *GetIndexerStatusRequest) (*GetIndexerStatusResponse, error)
+	GetIssuanceTrend(context.Context, *GetIssuanceTrendRequest) (*GetIssuanceTrendResponse, error)
 }
 
 // UnimplementedCertificateQueryServer should be embedded to have
@@ -126,6 +139,9 @@ func (UnimplementedCertificateQueryServer) StreamCertificateEvents(*StreamCertif
 }
 func (UnimplementedCertificateQueryServer) GetIndexerStatus(context.Context, *GetIndexerStatusRequest) (*GetIndexerStatusResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetIndexerStatus not implemented")
+}
+func (UnimplementedCertificateQueryServer) GetIssuanceTrend(context.Context, *GetIssuanceTrendRequest) (*GetIssuanceTrendResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetIssuanceTrend not implemented")
 }
 func (UnimplementedCertificateQueryServer) testEmbeddedByValue() {}
 
@@ -212,6 +228,24 @@ func _CertificateQuery_GetIndexerStatus_Handler(srv interface{}, ctx context.Con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _CertificateQuery_GetIssuanceTrend_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetIssuanceTrendRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CertificateQueryServer).GetIssuanceTrend(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CertificateQuery_GetIssuanceTrend_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CertificateQueryServer).GetIssuanceTrend(ctx, req.(*GetIssuanceTrendRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // CertificateQuery_ServiceDesc is the grpc.ServiceDesc for CertificateQuery service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -230,6 +264,10 @@ var CertificateQuery_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetIndexerStatus",
 			Handler:    _CertificateQuery_GetIndexerStatus_Handler,
+		},
+		{
+			MethodName: "GetIssuanceTrend",
+			Handler:    _CertificateQuery_GetIssuanceTrend_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

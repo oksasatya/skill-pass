@@ -22,6 +22,58 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type TrendBucket int32
+
+const (
+	TrendBucket_TREND_BUCKET_UNSPECIFIED TrendBucket = 0
+	TrendBucket_TREND_BUCKET_DAY         TrendBucket = 1
+	TrendBucket_TREND_BUCKET_WEEK        TrendBucket = 2
+	TrendBucket_TREND_BUCKET_MONTH       TrendBucket = 3
+)
+
+// Enum value maps for TrendBucket.
+var (
+	TrendBucket_name = map[int32]string{
+		0: "TREND_BUCKET_UNSPECIFIED",
+		1: "TREND_BUCKET_DAY",
+		2: "TREND_BUCKET_WEEK",
+		3: "TREND_BUCKET_MONTH",
+	}
+	TrendBucket_value = map[string]int32{
+		"TREND_BUCKET_UNSPECIFIED": 0,
+		"TREND_BUCKET_DAY":         1,
+		"TREND_BUCKET_WEEK":        2,
+		"TREND_BUCKET_MONTH":       3,
+	}
+)
+
+func (x TrendBucket) Enum() *TrendBucket {
+	p := new(TrendBucket)
+	*p = x
+	return p
+}
+
+func (x TrendBucket) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (TrendBucket) Descriptor() protoreflect.EnumDescriptor {
+	return file_skillpass_cert_v1_certificate_proto_enumTypes[0].Descriptor()
+}
+
+func (TrendBucket) Type() protoreflect.EnumType {
+	return &file_skillpass_cert_v1_certificate_proto_enumTypes[0]
+}
+
+func (x TrendBucket) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use TrendBucket.Descriptor instead.
+func (TrendBucket) EnumDescriptor() ([]byte, []int) {
+	return file_skillpass_cert_v1_certificate_proto_rawDescGZIP(), []int{0}
+}
+
 // Certificate is the read DTO. token_id is a STRING because Solidity uint256 does not fit int64.
 type Certificate struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -563,6 +615,154 @@ func (x *GetIndexerStatusResponse) GetTotalCertificates() uint64 {
 	return 0
 }
 
+type GetIssuanceTrendRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Bucket        TrendBucket            `protobuf:"varint,1,opt,name=bucket,proto3,enum=skillpass.cert.v1.TrendBucket" json:"bucket,omitempty"`
+	RangePreset   string                 `protobuf:"bytes,2,opt,name=range_preset,json=rangePreset,proto3" json:"range_preset,omitempty"` // e.g. "30d" for DAY, "12w" for WEEK, "12m" for MONTH
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetIssuanceTrendRequest) Reset() {
+	*x = GetIssuanceTrendRequest{}
+	mi := &file_skillpass_cert_v1_certificate_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetIssuanceTrendRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetIssuanceTrendRequest) ProtoMessage() {}
+
+func (x *GetIssuanceTrendRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_skillpass_cert_v1_certificate_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetIssuanceTrendRequest.ProtoReflect.Descriptor instead.
+func (*GetIssuanceTrendRequest) Descriptor() ([]byte, []int) {
+	return file_skillpass_cert_v1_certificate_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *GetIssuanceTrendRequest) GetBucket() TrendBucket {
+	if x != nil {
+		return x.Bucket
+	}
+	return TrendBucket_TREND_BUCKET_UNSPECIFIED
+}
+
+func (x *GetIssuanceTrendRequest) GetRangePreset() string {
+	if x != nil {
+		return x.RangePreset
+	}
+	return ""
+}
+
+type TrendPoint struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	BucketStart   *timestamppb.Timestamp `protobuf:"bytes,1,opt,name=bucket_start,json=bucketStart,proto3" json:"bucket_start,omitempty"` // UTC
+	Count         uint64                 `protobuf:"varint,2,opt,name=count,proto3" json:"count,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TrendPoint) Reset() {
+	*x = TrendPoint{}
+	mi := &file_skillpass_cert_v1_certificate_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TrendPoint) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TrendPoint) ProtoMessage() {}
+
+func (x *TrendPoint) ProtoReflect() protoreflect.Message {
+	mi := &file_skillpass_cert_v1_certificate_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TrendPoint.ProtoReflect.Descriptor instead.
+func (*TrendPoint) Descriptor() ([]byte, []int) {
+	return file_skillpass_cert_v1_certificate_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *TrendPoint) GetBucketStart() *timestamppb.Timestamp {
+	if x != nil {
+		return x.BucketStart
+	}
+	return nil
+}
+
+func (x *TrendPoint) GetCount() uint64 {
+	if x != nil {
+		return x.Count
+	}
+	return 0
+}
+
+type GetIssuanceTrendResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Points        []*TrendPoint          `protobuf:"bytes,1,rep,name=points,proto3" json:"points,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetIssuanceTrendResponse) Reset() {
+	*x = GetIssuanceTrendResponse{}
+	mi := &file_skillpass_cert_v1_certificate_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetIssuanceTrendResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetIssuanceTrendResponse) ProtoMessage() {}
+
+func (x *GetIssuanceTrendResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_skillpass_cert_v1_certificate_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetIssuanceTrendResponse.ProtoReflect.Descriptor instead.
+func (*GetIssuanceTrendResponse) Descriptor() ([]byte, []int) {
+	return file_skillpass_cert_v1_certificate_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *GetIssuanceTrendResponse) GetPoints() []*TrendPoint {
+	if x != nil {
+		return x.Points
+	}
+	return nil
+}
+
 var File_skillpass_cert_v1_certificate_proto protoreflect.FileDescriptor
 
 const file_skillpass_cert_v1_certificate_proto_rawDesc = "" +
@@ -607,12 +807,27 @@ const file_skillpass_cert_v1_certificate_proto_rawDesc = "" +
 	"\x10chain_head_block\x18\x02 \x01(\x04R\x0echainHeadBlock\x12\x1b\n" +
 	"\tindex_lag\x18\x03 \x01(\x04R\bindexLag\x12\x18\n" +
 	"\ahealthy\x18\x04 \x01(\bR\ahealthy\x12-\n" +
-	"\x12total_certificates\x18\x05 \x01(\x04R\x11totalCertificates2\xc8\x03\n" +
+	"\x12total_certificates\x18\x05 \x01(\x04R\x11totalCertificates\"t\n" +
+	"\x17GetIssuanceTrendRequest\x126\n" +
+	"\x06bucket\x18\x01 \x01(\x0e2\x1e.skillpass.cert.v1.TrendBucketR\x06bucket\x12!\n" +
+	"\frange_preset\x18\x02 \x01(\tR\vrangePreset\"a\n" +
+	"\n" +
+	"TrendPoint\x12=\n" +
+	"\fbucket_start\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\vbucketStart\x12\x14\n" +
+	"\x05count\x18\x02 \x01(\x04R\x05count\"Q\n" +
+	"\x18GetIssuanceTrendResponse\x125\n" +
+	"\x06points\x18\x01 \x03(\v2\x1d.skillpass.cert.v1.TrendPointR\x06points*p\n" +
+	"\vTrendBucket\x12\x1c\n" +
+	"\x18TREND_BUCKET_UNSPECIFIED\x10\x00\x12\x14\n" +
+	"\x10TREND_BUCKET_DAY\x10\x01\x12\x15\n" +
+	"\x11TREND_BUCKET_WEEK\x10\x02\x12\x16\n" +
+	"\x12TREND_BUCKET_MONTH\x10\x032\xb5\x04\n" +
 	"\x10CertificateQuery\x12e\n" +
 	"\x0eGetCertificate\x12(.skillpass.cert.v1.GetCertificateRequest\x1a).skillpass.cert.v1.GetCertificateResponse\x12k\n" +
 	"\x10ListCertificates\x12*.skillpass.cert.v1.ListCertificatesRequest\x1a+.skillpass.cert.v1.ListCertificatesResponse\x12s\n" +
 	"\x17StreamCertificateEvents\x121.skillpass.cert.v1.StreamCertificateEventsRequest\x1a#.skillpass.cert.v1.CertificateEvent0\x01\x12k\n" +
-	"\x10GetIndexerStatus\x12*.skillpass.cert.v1.GetIndexerStatusRequest\x1a+.skillpass.cert.v1.GetIndexerStatusResponseBFZDgithub.com/oksasatya/skillpass/proto/gen/go/skillpass/cert/v1;certv1b\x06proto3"
+	"\x10GetIndexerStatus\x12*.skillpass.cert.v1.GetIndexerStatusRequest\x1a+.skillpass.cert.v1.GetIndexerStatusResponse\x12k\n" +
+	"\x10GetIssuanceTrend\x12*.skillpass.cert.v1.GetIssuanceTrendRequest\x1a+.skillpass.cert.v1.GetIssuanceTrendResponseBFZDgithub.com/oksasatya/skillpass/proto/gen/go/skillpass/cert/v1;certv1b\x06proto3"
 
 var (
 	file_skillpass_cert_v1_certificate_proto_rawDescOnce sync.Once
@@ -626,37 +841,47 @@ func file_skillpass_cert_v1_certificate_proto_rawDescGZIP() []byte {
 	return file_skillpass_cert_v1_certificate_proto_rawDescData
 }
 
-var file_skillpass_cert_v1_certificate_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_skillpass_cert_v1_certificate_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_skillpass_cert_v1_certificate_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
 var file_skillpass_cert_v1_certificate_proto_goTypes = []any{
-	(*Certificate)(nil),                    // 0: skillpass.cert.v1.Certificate
-	(*GetCertificateRequest)(nil),          // 1: skillpass.cert.v1.GetCertificateRequest
-	(*GetCertificateResponse)(nil),         // 2: skillpass.cert.v1.GetCertificateResponse
-	(*ListCertificatesRequest)(nil),        // 3: skillpass.cert.v1.ListCertificatesRequest
-	(*ListCertificatesResponse)(nil),       // 4: skillpass.cert.v1.ListCertificatesResponse
-	(*StreamCertificateEventsRequest)(nil), // 5: skillpass.cert.v1.StreamCertificateEventsRequest
-	(*CertificateEvent)(nil),               // 6: skillpass.cert.v1.CertificateEvent
-	(*GetIndexerStatusRequest)(nil),        // 7: skillpass.cert.v1.GetIndexerStatusRequest
-	(*GetIndexerStatusResponse)(nil),       // 8: skillpass.cert.v1.GetIndexerStatusResponse
-	(*timestamppb.Timestamp)(nil),          // 9: google.protobuf.Timestamp
+	(TrendBucket)(0),                       // 0: skillpass.cert.v1.TrendBucket
+	(*Certificate)(nil),                    // 1: skillpass.cert.v1.Certificate
+	(*GetCertificateRequest)(nil),          // 2: skillpass.cert.v1.GetCertificateRequest
+	(*GetCertificateResponse)(nil),         // 3: skillpass.cert.v1.GetCertificateResponse
+	(*ListCertificatesRequest)(nil),        // 4: skillpass.cert.v1.ListCertificatesRequest
+	(*ListCertificatesResponse)(nil),       // 5: skillpass.cert.v1.ListCertificatesResponse
+	(*StreamCertificateEventsRequest)(nil), // 6: skillpass.cert.v1.StreamCertificateEventsRequest
+	(*CertificateEvent)(nil),               // 7: skillpass.cert.v1.CertificateEvent
+	(*GetIndexerStatusRequest)(nil),        // 8: skillpass.cert.v1.GetIndexerStatusRequest
+	(*GetIndexerStatusResponse)(nil),       // 9: skillpass.cert.v1.GetIndexerStatusResponse
+	(*GetIssuanceTrendRequest)(nil),        // 10: skillpass.cert.v1.GetIssuanceTrendRequest
+	(*TrendPoint)(nil),                     // 11: skillpass.cert.v1.TrendPoint
+	(*GetIssuanceTrendResponse)(nil),       // 12: skillpass.cert.v1.GetIssuanceTrendResponse
+	(*timestamppb.Timestamp)(nil),          // 13: google.protobuf.Timestamp
 }
 var file_skillpass_cert_v1_certificate_proto_depIdxs = []int32{
-	9, // 0: skillpass.cert.v1.Certificate.issued_at:type_name -> google.protobuf.Timestamp
-	0, // 1: skillpass.cert.v1.GetCertificateResponse.certificate:type_name -> skillpass.cert.v1.Certificate
-	0, // 2: skillpass.cert.v1.ListCertificatesResponse.certificates:type_name -> skillpass.cert.v1.Certificate
-	0, // 3: skillpass.cert.v1.CertificateEvent.certificate:type_name -> skillpass.cert.v1.Certificate
-	1, // 4: skillpass.cert.v1.CertificateQuery.GetCertificate:input_type -> skillpass.cert.v1.GetCertificateRequest
-	3, // 5: skillpass.cert.v1.CertificateQuery.ListCertificates:input_type -> skillpass.cert.v1.ListCertificatesRequest
-	5, // 6: skillpass.cert.v1.CertificateQuery.StreamCertificateEvents:input_type -> skillpass.cert.v1.StreamCertificateEventsRequest
-	7, // 7: skillpass.cert.v1.CertificateQuery.GetIndexerStatus:input_type -> skillpass.cert.v1.GetIndexerStatusRequest
-	2, // 8: skillpass.cert.v1.CertificateQuery.GetCertificate:output_type -> skillpass.cert.v1.GetCertificateResponse
-	4, // 9: skillpass.cert.v1.CertificateQuery.ListCertificates:output_type -> skillpass.cert.v1.ListCertificatesResponse
-	6, // 10: skillpass.cert.v1.CertificateQuery.StreamCertificateEvents:output_type -> skillpass.cert.v1.CertificateEvent
-	8, // 11: skillpass.cert.v1.CertificateQuery.GetIndexerStatus:output_type -> skillpass.cert.v1.GetIndexerStatusResponse
-	8, // [8:12] is the sub-list for method output_type
-	4, // [4:8] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	13, // 0: skillpass.cert.v1.Certificate.issued_at:type_name -> google.protobuf.Timestamp
+	1,  // 1: skillpass.cert.v1.GetCertificateResponse.certificate:type_name -> skillpass.cert.v1.Certificate
+	1,  // 2: skillpass.cert.v1.ListCertificatesResponse.certificates:type_name -> skillpass.cert.v1.Certificate
+	1,  // 3: skillpass.cert.v1.CertificateEvent.certificate:type_name -> skillpass.cert.v1.Certificate
+	0,  // 4: skillpass.cert.v1.GetIssuanceTrendRequest.bucket:type_name -> skillpass.cert.v1.TrendBucket
+	13, // 5: skillpass.cert.v1.TrendPoint.bucket_start:type_name -> google.protobuf.Timestamp
+	11, // 6: skillpass.cert.v1.GetIssuanceTrendResponse.points:type_name -> skillpass.cert.v1.TrendPoint
+	2,  // 7: skillpass.cert.v1.CertificateQuery.GetCertificate:input_type -> skillpass.cert.v1.GetCertificateRequest
+	4,  // 8: skillpass.cert.v1.CertificateQuery.ListCertificates:input_type -> skillpass.cert.v1.ListCertificatesRequest
+	6,  // 9: skillpass.cert.v1.CertificateQuery.StreamCertificateEvents:input_type -> skillpass.cert.v1.StreamCertificateEventsRequest
+	8,  // 10: skillpass.cert.v1.CertificateQuery.GetIndexerStatus:input_type -> skillpass.cert.v1.GetIndexerStatusRequest
+	10, // 11: skillpass.cert.v1.CertificateQuery.GetIssuanceTrend:input_type -> skillpass.cert.v1.GetIssuanceTrendRequest
+	3,  // 12: skillpass.cert.v1.CertificateQuery.GetCertificate:output_type -> skillpass.cert.v1.GetCertificateResponse
+	5,  // 13: skillpass.cert.v1.CertificateQuery.ListCertificates:output_type -> skillpass.cert.v1.ListCertificatesResponse
+	7,  // 14: skillpass.cert.v1.CertificateQuery.StreamCertificateEvents:output_type -> skillpass.cert.v1.CertificateEvent
+	9,  // 15: skillpass.cert.v1.CertificateQuery.GetIndexerStatus:output_type -> skillpass.cert.v1.GetIndexerStatusResponse
+	12, // 16: skillpass.cert.v1.CertificateQuery.GetIssuanceTrend:output_type -> skillpass.cert.v1.GetIssuanceTrendResponse
+	12, // [12:17] is the sub-list for method output_type
+	7,  // [7:12] is the sub-list for method input_type
+	7,  // [7:7] is the sub-list for extension type_name
+	7,  // [7:7] is the sub-list for extension extendee
+	0,  // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_skillpass_cert_v1_certificate_proto_init() }
@@ -669,13 +894,14 @@ func file_skillpass_cert_v1_certificate_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_skillpass_cert_v1_certificate_proto_rawDesc), len(file_skillpass_cert_v1_certificate_proto_rawDesc)),
-			NumEnums:      0,
-			NumMessages:   9,
+			NumEnums:      1,
+			NumMessages:   12,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
 		GoTypes:           file_skillpass_cert_v1_certificate_proto_goTypes,
 		DependencyIndexes: file_skillpass_cert_v1_certificate_proto_depIdxs,
+		EnumInfos:         file_skillpass_cert_v1_certificate_proto_enumTypes,
 		MessageInfos:      file_skillpass_cert_v1_certificate_proto_msgTypes,
 	}.Build()
 	File_skillpass_cert_v1_certificate_proto = out.File

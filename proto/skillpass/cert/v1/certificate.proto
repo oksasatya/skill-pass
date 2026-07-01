@@ -13,6 +13,7 @@ service CertificateQuery {
   rpc ListCertificates(ListCertificatesRequest) returns (ListCertificatesResponse);
   rpc StreamCertificateEvents(StreamCertificateEventsRequest) returns (stream CertificateEvent);
   rpc GetIndexerStatus(GetIndexerStatusRequest) returns (GetIndexerStatusResponse);
+  rpc GetIssuanceTrend(GetIssuanceTrendRequest) returns (GetIssuanceTrendResponse);
 }
 
 // Certificate is the read DTO. token_id is a STRING because Solidity uint256 does not fit int64.
@@ -59,4 +60,25 @@ message GetIndexerStatusResponse {
   uint64 index_lag = 3; // chain_head - last_processed
   bool healthy = 4;
   uint64 total_certificates = 5;
+}
+
+enum TrendBucket {
+  TREND_BUCKET_UNSPECIFIED = 0;
+  TREND_BUCKET_DAY = 1;
+  TREND_BUCKET_WEEK = 2;
+  TREND_BUCKET_MONTH = 3;
+}
+
+message GetIssuanceTrendRequest {
+  TrendBucket bucket = 1;
+  string range_preset = 2; // e.g. "30d" for DAY, "12w" for WEEK, "12m" for MONTH
+}
+
+message TrendPoint {
+  google.protobuf.Timestamp bucket_start = 1; // UTC
+  uint64 count = 2;
+}
+
+message GetIssuanceTrendResponse {
+  repeated TrendPoint points = 1;
 }
