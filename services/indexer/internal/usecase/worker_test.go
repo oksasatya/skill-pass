@@ -52,8 +52,10 @@ func (f *fakeEventSource) GetCertificate(_ context.Context, tokenID string) (dom
 
 // fakeRepo implements usecase.CertificateRepo for tests.
 type fakeRepo struct {
-	certs map[string]domain.Certificate
-	state domain.IndexerState
+	certs     map[string]domain.Certificate
+	state     domain.IndexerState
+	outbox    map[string]int64 // "txHash:tokenID" -> assigned id
+	outboxSeq int64
 }
 
 func newFakeRepo() *fakeRepo {
@@ -105,16 +107,26 @@ func (r *fakeRepo) GetIssuanceTrend(_ context.Context, _ usecase.TrendBucket, _ 
 	return nil, nil
 }
 
-// InsertWebhookOutbox, ListUnenqueuedWebhookOutbox, MarkWebhookOutboxEnqueued are unused by
-// worker tests; stubbed only to satisfy usecase.CertificateRepo.
-func (r *fakeRepo) InsertWebhookOutbox(_ context.Context, _ int64, _, _ string, _ []byte) (int64, bool, error) {
-	return 0, false, nil
+// InsertWebhookOutbox fakes the (chain_id, tx_hash, token_id) dedup for tests.
+func (r *fakeRepo) InsertWebhookOutbox(_ context.Context, _ int64, txHash, tokenID string, _ []byte) (int64, bool, error) {
+	if r.outbox == nil {
+		r.outbox = make(map[string]int64)
+	}
+	key := txHash + ":" + tokenID
+	if _, exists := r.outbox[key]; exists {
+		return 0, false, nil
+	}
+	r.outboxSeq++
+	r.outbox[key] = r.outboxSeq
+	return r.outboxSeq, true, nil
 }
 
+// ListUnenqueuedWebhookOutbox is unused by worker tests; stubbed only to satisfy the port.
 func (r *fakeRepo) ListUnenqueuedWebhookOutbox(_ context.Context, _ int) ([]usecase.WebhookOutboxEntry, error) {
 	return nil, nil
 }
 
+// MarkWebhookOutboxEnqueued is unused by worker tests; stubbed only to satisfy the port.
 func (r *fakeRepo) MarkWebhookOutboxEnqueued(_ context.Context, _ int64) error {
 	return nil
 }
@@ -449,8 +461,104 @@ func TestWorker_EnqueuesTrendRefresh_OnSuccessfulUpsert(t *testing.T) {
 	if err := w.Poll(t.Context()); err != nil {
 		t.Fatalf("poll: %v", err)
 	}
-	if len(enq.enqueued) != 1 || enq.enqueued[0] != usecase.TrendRefreshTaskType {
+	if countTaskType(enq.enqueued, usecase.TrendRefreshTaskType) != 1 {
 		t.Fatalf("want 1 enqueue of %q, got %v", usecase.TrendRefreshTaskType, enq.enqueued)
+	}
+}
+
+// countTaskType counts occurrences of taskType in enqueued -- Task 4 adds a second
+// enqueue call (webhook:deliver) alongside trend:refresh, so exact-length assertions on
+// the whole slice are no longer meaningful; count the specific type instead.
+func countTaskType(enqueued []string, taskType string) int {
+	n := 0
+	for _, t := range enqueued {
+		if t == taskType {
+			n++
+		}
+	}
+	return n
+}
+
+func TestWorker_EnqueuesWebhookDeliver_OnNewCertificate(t *testing.T) {
+	repo := newFakeRepo()
+	src := &fakeEventSource{
+		head: 1,
+		logs: map[uint64][]domain.IssuedLog{1: {sampleLog("1", 1)}},
+		certs: map[string]domain.OnchainCertificate{
+			"1": sampleCert("1"),
+		},
+	}
+	enq := &fakeEnqueuer{}
+	w := newWorker(src, repo)
+	w.SetEnqueuer(enq)
+
+	if err := w.Poll(t.Context()); err != nil {
+		t.Fatalf("poll: %v", err)
+	}
+	if countTaskType(enq.enqueued, usecase.WebhookDeliverTaskType) != 1 {
+		t.Fatalf("want 1 enqueue of %q, got %v", usecase.WebhookDeliverTaskType, enq.enqueued)
+	}
+}
+
+func TestWorker_DoesNotReenqueueWebhook_OnIdempotentReplay(t *testing.T) {
+	repo := newFakeRepo()
+	src := &fakeEventSource{
+		head: 1,
+		logs: map[uint64][]domain.IssuedLog{1: {sampleLog("1", 1)}},
+		certs: map[string]domain.OnchainCertificate{
+			"1": sampleCert("1"),
+		},
+	}
+	enq := &fakeEnqueuer{}
+	w := newWorker(src, repo)
+	w.SetEnqueuer(enq)
+
+	if err := w.Poll(t.Context()); err != nil {
+		t.Fatalf("first poll: %v", err)
+	}
+	if got := countTaskType(enq.enqueued, usecase.WebhookDeliverTaskType); got != 1 {
+		t.Fatalf("want 1 webhook enqueue after first poll, got %d", got)
+	}
+
+	// Reset the checkpoint (simulating a reorg replay of the same certificate) but keep
+	// the SAME repo/outbox map -- the outbox dedup must prevent a second webhook enqueue.
+	repo.state = domain.IndexerState{}
+	if err := w.Poll(t.Context()); err != nil {
+		t.Fatalf("second (replay) poll: %v", err)
+	}
+	if got := countTaskType(enq.enqueued, usecase.WebhookDeliverTaskType); got != 1 {
+		t.Fatalf("want still only 1 webhook enqueue after replay (outbox dedup), got %d", got)
+	}
+}
+
+// fakeFailingOutboxRepo wraps fakeRepo but makes InsertWebhookOutbox always fail --
+// verifies processLog propagates the error (fatal) rather than swallowing it.
+type fakeFailingOutboxRepo struct {
+	*fakeRepo
+}
+
+func (r *fakeFailingOutboxRepo) InsertWebhookOutbox(_ context.Context, _ int64, _, _ string, _ []byte) (int64, bool, error) {
+	return 0, false, errors.New("fake: outbox insert failed")
+}
+
+func TestWorker_InsertWebhookOutboxError_IsFatal_StateNotAdvanced(t *testing.T) {
+	repo := &fakeFailingOutboxRepo{fakeRepo: newFakeRepo()}
+	src := &fakeEventSource{
+		head: 1,
+		logs: map[uint64][]domain.IssuedLog{1: {sampleLog("1", 1)}},
+		certs: map[string]domain.OnchainCertificate{
+			"1": sampleCert("1"),
+		},
+	}
+	w := newWorker(src, repo)
+	w.SetEnqueuer(&fakeEnqueuer{})
+
+	err := w.Poll(t.Context())
+	if err == nil {
+		t.Fatal("want an error when InsertWebhookOutbox fails")
+	}
+	if repo.state.LastProcessedBlock != 0 {
+		t.Fatalf("state must not advance when outbox insert fails, got %d", repo.state.LastProcessedBlock)
 	}
 }
 

@@ -235,6 +235,46 @@ func (w *Worker) processLog(ctx context.Context, l domain.IssuedLog) error {
 			// a failed enqueue just means the trend cache stays stale until the cron backstop runs.
 			w.log.Warn("enqueue trend refresh", "err", err)
 		}
+		if err := w.enqueueWebhook(ctx, cert); err != nil {
+			return fmt.Errorf("webhook outbox %s: %w", l.TokenID, err)
+		}
+	}
+	return nil
+}
+
+// enqueueWebhook durably records that cert owes a webhook delivery, then best-effort
+// enqueues it. InsertWebhookOutbox failing is FATAL -- it propagates so poll() does not
+// advance the checkpoint and retries the whole batch next cycle (both Upsert and
+// InsertWebhookOutbox are idempotent under retry via their own ON CONFLICT clauses). The
+// enqueue-to-asynq step below stays best-effort/logged: webhook:sweep (Task 5) is its
+// backstop.
+func (w *Worker) enqueueWebhook(ctx context.Context, cert domain.Certificate) error {
+	payload, err := NewWebhookEvent(cert)
+	if err != nil {
+		return err
+	}
+	id, isNew, err := w.repo.InsertWebhookOutbox(ctx, w.cfg.ChainID, cert.TxHash, cert.TokenID, payload)
+	if err != nil {
+		return err
+	}
+	if !isNew {
+		return nil // already recorded for this exact on-chain event -- nothing to do
+	}
+	taskID := fmt.Sprintf("%s:%d", WebhookDeliverTaskType, id)
+	if err := w.enqueuer.EnqueueUnique(ctx, WebhookDeliverTaskType, taskID, payload); err != nil {
+		// A failed enqueue here is fully recovered by webhook:sweep, since the outbox row
+		// stays enqueued_at IS NULL until something successfully enqueues it.
+		w.log.Warn("enqueue webhook deliver", "err", err)
+		return nil
+	}
+	if err := w.repo.MarkWebhookOutboxEnqueued(ctx, id); err != nil {
+		// webhook: enqueue succeeded but marking it failed -- realistic trigger is
+		// shutdown/context cancellation (worker runs on a cancelable ctx; see main.go's
+		// shutdown sequencing), not just a generic DB hiccup. The row stays unenqueued
+		// and webhook:sweep will retry it. Full elimination needs 2PC between Postgres
+		// and Redis, disproportionate at this project's stage -- accepted, bounded
+		// tradeoff: see design doc §2.
+		w.log.Warn("mark webhook outbox enqueued", "err", err)
 	}
 	return nil
 }
