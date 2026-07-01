@@ -97,6 +97,6 @@ const TrendRefreshTaskType = "trend:refresh"
 // is nil-safe if none is wired.
 type TaskEnqueuer interface {
 	// EnqueueUnique enqueues a task, deduped by taskID: a second call with the same taskID
-	// while one is still pending/processing is a no-op.
-	EnqueueUnique(ctx context.Context, taskType, taskID string) error
+	// while one is still pending/processing is a no-op. payload may be nil.
+	EnqueueUnique(ctx context.Context, taskType, taskID string, payload []byte) error
 }

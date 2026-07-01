@@ -410,10 +410,12 @@ func TestWorker_Reconcile_ColdStart_IsNoop(t *testing.T) {
 // fakeEnqueuer implements usecase.TaskEnqueuer for tests.
 type fakeEnqueuer struct {
 	enqueued []string // taskType per call
+	payloads [][]byte // payload per call, parallel to enqueued
 }
 
-func (f *fakeEnqueuer) EnqueueUnique(_ context.Context, taskType, _ string) error {
+func (f *fakeEnqueuer) EnqueueUnique(_ context.Context, taskType, _ string, payload []byte) error {
 	f.enqueued = append(f.enqueued, taskType)
+	f.payloads = append(f.payloads, payload)
 	return nil
 }
 

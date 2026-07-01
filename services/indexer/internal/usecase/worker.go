@@ -230,7 +230,7 @@ func (w *Worker) processLog(ctx context.Context, l domain.IssuedLog) error {
 		w.pub.Publish(cert)
 	}
 	if w.enqueuer != nil {
-		if err := w.enqueuer.EnqueueUnique(ctx, TrendRefreshTaskType, TrendRefreshTaskType); err != nil {
+		if err := w.enqueuer.EnqueueUnique(ctx, TrendRefreshTaskType, TrendRefreshTaskType, nil); err != nil {
 			// Non-fatal: ingest correctness never depends on the cache-refresh job succeeding —
 			// a failed enqueue just means the trend cache stays stale until the cron backstop runs.
 			w.log.Warn("enqueue trend refresh", "err", err)

@@ -29,9 +29,9 @@ func NewEnqueuer(client *asynq.Client) *Enqueuer {
 }
 
 // EnqueueUnique enqueues taskType, deduped by taskID within uniqueTTL — a duplicate call
-// while one is pending is absorbed as a no-op, not an error.
-func (e *Enqueuer) EnqueueUnique(ctx context.Context, taskType, taskID string) error {
-	task := asynq.NewTask(taskType, nil)
+// while one is pending is absorbed as a no-op, not an error. payload may be nil.
+func (e *Enqueuer) EnqueueUnique(ctx context.Context, taskType, taskID string, payload []byte) error {
+	task := asynq.NewTask(taskType, payload)
 	_, err := e.client.EnqueueContext(ctx, task, asynq.TaskID(taskID), asynq.Unique(uniqueTTL))
 	// Both indicate an equivalent task is already pending/active: the common case is
 	// ErrDuplicateTask (the Unique key is still held); ErrTaskIDConflict is the narrow
