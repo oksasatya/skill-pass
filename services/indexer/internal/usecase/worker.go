@@ -25,12 +25,13 @@ type WorkerConfig struct {
 // Worker is the application service that polls the chain and upserts into the read model.
 // It is resumable (persists state after each batch) and idempotent (Upsert is keyed on token_id).
 type Worker struct {
-	src  EventSource
-	repo CertificateRepo
-	cfg  WorkerConfig
-	log  *slog.Logger
-	pub  EventPublisher // optional; nil-safe (see SetPublisher)
-	next uint64         // next block to process; resolved on first poll
+	src      EventSource
+	repo     CertificateRepo
+	cfg      WorkerConfig
+	log      *slog.Logger
+	pub      EventPublisher // optional; nil-safe (see SetPublisher)
+	enqueuer TaskEnqueuer   // optional; nil-safe (see SetEnqueuer)
+	next     uint64         // next block to process; resolved on first poll
 }
 
 // NewWorker constructs a Worker with its dependencies.
@@ -45,6 +46,12 @@ func NewWorker(src EventSource, repo CertificateRepo, cfg WorkerConfig, log *slo
 // call — processLog no-ops the publish step when pub is nil.
 func (w *Worker) SetPublisher(pub EventPublisher) {
 	w.pub = pub
+}
+
+// SetEnqueuer wires an optional background-task enqueuer. Call before Run(); safe to never
+// call — processLog no-ops the enqueue step when enqueuer is nil.
+func (w *Worker) SetEnqueuer(e TaskEnqueuer) {
+	w.enqueuer = e
 }
 
 // Run is the long-lived poll loop. It stops when ctx is cancelled.
@@ -216,6 +223,13 @@ func (w *Worker) processLog(ctx context.Context, l domain.IssuedLog) error {
 	}
 	if w.pub != nil {
 		w.pub.Publish(cert)
+	}
+	if w.enqueuer != nil {
+		if err := w.enqueuer.EnqueueUnique(ctx, TrendRefreshTaskType, TrendRefreshTaskType); err != nil {
+			// Non-fatal: ingest correctness never depends on the cache-refresh job succeeding —
+			// a failed enqueue just means the trend cache stays stale until the cron backstop runs.
+			w.log.Warn("enqueue trend refresh", "err", err)
+		}
 	}
 	return nil
 }

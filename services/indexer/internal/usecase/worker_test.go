@@ -407,6 +407,52 @@ func TestWorker_Reconcile_ColdStart_IsNoop(t *testing.T) {
 	// must not panic or attempt a delete on an uninitialized checkpoint
 }
 
+// fakeEnqueuer implements usecase.TaskEnqueuer for tests.
+type fakeEnqueuer struct {
+	enqueued []string // taskType per call
+}
+
+func (f *fakeEnqueuer) EnqueueUnique(_ context.Context, taskType, _ string) error {
+	f.enqueued = append(f.enqueued, taskType)
+	return nil
+}
+
+func TestWorker_EnqueuesTrendRefresh_OnSuccessfulUpsert(t *testing.T) {
+	repo := newFakeRepo()
+	src := &fakeEventSource{
+		head: 1,
+		logs: map[uint64][]domain.IssuedLog{1: {sampleLog("1", 1)}},
+		certs: map[string]domain.OnchainCertificate{
+			"1": sampleCert("1"),
+		},
+	}
+	enq := &fakeEnqueuer{}
+	w := newWorker(src, repo)
+	w.SetEnqueuer(enq)
+
+	if err := w.Poll(t.Context()); err != nil {
+		t.Fatalf("poll: %v", err)
+	}
+	if len(enq.enqueued) != 1 || enq.enqueued[0] != usecase.TrendRefreshTaskType {
+		t.Fatalf("want 1 enqueue of %q, got %v", usecase.TrendRefreshTaskType, enq.enqueued)
+	}
+}
+
+func TestWorker_NilEnqueuer_NoPanic(t *testing.T) {
+	repo := newFakeRepo()
+	src := &fakeEventSource{
+		head: 1,
+		logs: map[uint64][]domain.IssuedLog{1: {sampleLog("1", 1)}},
+		certs: map[string]domain.OnchainCertificate{
+			"1": sampleCert("1"),
+		},
+	}
+	w := newWorker(src, repo) // SetEnqueuer never called
+	if err := w.Poll(t.Context()); err != nil {
+		t.Fatalf("poll: %v", err)
+	}
+}
+
 func TestWorker_ChecksInCanonicalHash_NotLastLogHash(t *testing.T) {
 	repo := newFakeRepo()
 	src := &fakeEventSource{
