@@ -63,8 +63,8 @@ dev-verify:
 	$$GRPCURL -plaintext -d '{}' localhost:50051 skillpass.cert.v1.CertificateQuery/GetIndexerStatus; \
 	echo "--- ListCertificates ---"; \
 	$$GRPCURL -plaintext -d '{}' localhost:50051 skillpass.cert.v1.CertificateQuery/ListCertificates; \
-	echo "--- GetCertificate token_id=0 ---"; \
-	$$GRPCURL -plaintext -d '{"token_id":"0"}' localhost:50051 skillpass.cert.v1.CertificateQuery/GetCertificate; \
+	echo "--- GetCertificate token_id=1 ---"; \
+	$$GRPCURL -plaintext -d '{"token_id":"1"}' localhost:50051 skillpass.cert.v1.CertificateQuery/GetCertificate; \
 	echo "--- gateway /readyz ---"; \
 	curl -sf http://localhost:8080/readyz; echo; \
 	echo "--- gateway GET /certificates ---"; \

@@ -7,6 +7,7 @@ export PATH="$HOME/.foundry/bin:$PATH"
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 RPC_URL="http://localhost:8545"
+GATEWAY_URL="http://localhost:8080"
 OWNER_KEY="0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
 CONTRACT="0x5FbDB2315678afecb367f032d93F642f64180aa3"
 
@@ -25,7 +26,15 @@ if [ "$CODE" = "0x" ]; then
 fi
 echo "    Code confirmed at $CONTRACT"
 
-echo "==> Issuing certificate #0 (recipient: account[1])..."
+# NOTE: totalSupply()+1 prediction assumes this script is the sole writer against a fresh
+# anvil instance. It is NOT safe against a concurrent minting flow (e.g. the web app's
+# useIssueCertificate hook running against the same anvil at the same time) -- acceptable
+# here since this script only ever targets a throwaway local dev chain.
+SUPPLY=$(cast call "$CONTRACT" "totalSupply()(uint256)" --rpc-url "$RPC_URL")
+NEXT_ID=$((SUPPLY + 1))
+METADATA_URI_1="${GATEWAY_URL}/certificates/${NEXT_ID}/metadata"
+
+echo "==> Issuing certificate #1 (recipient: account[1])..."
 cast send "$CONTRACT" \
   "issueCertificate(address,string,string,string,string,string)" \
   "0x70997970C51812dc3A010C7d01b50e0d17dc79C8" \
@@ -33,12 +42,15 @@ cast send "$CONTRACT" \
   "Oksa Satya" \
   "SkillPass Academy" \
   "Completed the Full Stack Web3 program" \
-  "ipfs://demo1" \
+  "$METADATA_URI_1" \
   --rpc-url "$RPC_URL" \
   --private-key "$OWNER_KEY" \
   --quiet
 
-echo "==> Issuing certificate #1 (recipient: account[2])..."
+NEXT_ID=$((NEXT_ID + 1))
+METADATA_URI_2="${GATEWAY_URL}/certificates/${NEXT_ID}/metadata"
+
+echo "==> Issuing certificate #2 (recipient: account[2])..."
 cast send "$CONTRACT" \
   "issueCertificate(address,string,string,string,string,string)" \
   "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC" \
@@ -46,7 +58,7 @@ cast send "$CONTRACT" \
   "Budi Santoso" \
   "SkillPass Academy" \
   "Completed the Smart Contract Security audit course" \
-  "ipfs://demo2" \
+  "$METADATA_URI_2" \
   --rpc-url "$RPC_URL" \
   --private-key "$OWNER_KEY" \
   --quiet

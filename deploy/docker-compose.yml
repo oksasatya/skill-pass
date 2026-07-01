@@ -61,6 +61,21 @@ services:
     networks:
       - skillpass
 
+  notify:
+    build:
+      context: ..
+      dockerfile: services/notify/Dockerfile
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      REDIS_ADDR: "redis:6379"
+      WEBHOOK_URL: "http://host.docker.internal:9000/webhook"
+      WEBHOOK_SECRET: "dev-secret-change-me"
+      HTTP_ADDR: ":8090"
+    networks:
+      - skillpass
+
   gateway:
     build:
       context: ..
