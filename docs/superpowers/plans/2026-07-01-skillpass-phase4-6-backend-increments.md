@@ -250,6 +250,7 @@ func TestWorker_Reconcile_DetectsReorgAndRewinds(t *testing.T) {
 			20: "0xcanonical20", // mismatches stored "0xstale-hash" -> reorg detected
 			8:  "0xcanonical8",  // rewindTo = 20-12 = 8
 		},
+		// no logs configured for [9,20] — nothing re-appears there in this test
 	}
 	w := newWorker(src, repo)
 
@@ -263,11 +264,17 @@ func TestWorker_Reconcile_DetectsReorgAndRewinds(t *testing.T) {
 	if _, ok := repo.certs["2"]; ok {
 		t.Fatal("token 2 (block 15, within rewound window) must be deleted")
 	}
-	if repo.state.LastProcessedBlock != 8 {
-		t.Fatalf("state.LastProcessedBlock = %d, want 8 (rewound)", repo.state.LastProcessedBlock)
+	// reconcile() rewinds the checkpoint to 8, but poll() does not return early — it falls
+	// straight through to the normal fetch-and-advance logic using the now-rewound w.next,
+	// re-scanning [9,20] in the SAME Poll() call (no logs there in this test, so nothing is
+	// re-added) and advancing the checkpoint to head. This converges in one poll cycle
+	// instead of requiring an extra tick — the final observable state is at head, not at
+	// the intermediate rewound point.
+	if repo.state.LastProcessedBlock != 20 {
+		t.Fatalf("state.LastProcessedBlock = %d, want 20 (rewound to 8, then re-scanned forward to head in the same Poll() call)", repo.state.LastProcessedBlock)
 	}
-	if repo.state.LastProcessedHash != "0xcanonical8" {
-		t.Fatalf("state.LastProcessedHash = %q, want canonical hash of the rewound block", repo.state.LastProcessedHash)
+	if repo.state.LastProcessedHash != "0xcanonical20" {
+		t.Fatalf("state.LastProcessedHash = %q, want the canonical hash of head (20)", repo.state.LastProcessedHash)
 	}
 }
 
@@ -426,6 +433,16 @@ func (w *Worker) reconcile(ctx context.Context) error {
 ```
 
 Also remove the now-unused `lastHash` local variable and its comment block from the old `poll` body (they're superseded by the canonical-hash fetch above) — the "ponytail: LastProcessedHash = the last log's block hash..." comment is deleted since the gap it documented is exactly what this task fixes.
+
+- [ ] **Step 4b: Update the pre-existing `TestWorker_Resume` for the new canonical-hash check**
+
+`TestWorker_Resume` (already in `worker_test.go` from BE-1) seeds `repo.state` with `LastProcessedHash: "0xaabbcc"` — a placeholder value that predates this task's checkpoint-hash fix. Under the new `reconcile()` check, this no longer matches the fake's default canonical hash for block 3 (`fmt.Sprintf("0xcanonical%d", 3)` = `"0xcanonical3"`), so `reconcile()` would incorrectly detect a false reorg and corrupt this pre-existing test. Change the seeded value:
+
+```go
+	repo.state = domain.IndexerState{ChainID: 31337, LastProcessedBlock: 3, LastProcessedHash: "0xcanonical3"}
+```
+
+(This is the ONLY change to `TestWorker_Resume` — everything else about the test stays as it already is in the file.)
 
 - [ ] **Step 5: Run tests to verify they pass**
 
