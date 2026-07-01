@@ -520,10 +520,20 @@ func TestWorker_DoesNotReenqueueWebhook_OnIdempotentReplay(t *testing.T) {
 		t.Fatalf("want 1 webhook enqueue after first poll, got %d", got)
 	}
 
-	// Reset the checkpoint (simulating a reorg replay of the same certificate) but keep
-	// the SAME repo/outbox map -- the outbox dedup must prevent a second webhook enqueue.
+	// Simulate a reorg replay of the same certificate: a fresh Worker instance re-derives
+	// its resume point from repo.state (reset below), so it genuinely re-fetches and
+	// re-processes block 1's log through processLog/enqueueWebhook/InsertWebhookOutbox --
+	// exercising the outbox dedup path for real. Reusing the SAME Worker instance would not
+	// do this: its in-memory w.next cursor already advanced past head after the first poll
+	// and isn't reset by mutating the fake repo's state, so a second Poll() on it would
+	// short-circuit before ever reaching processLog again -- a vacuous test that passes for
+	// the wrong reason. Sharing the same repo (and its outbox map) and the same enqueuer
+	// across w and w2 is what lets this test observe whether the dedup key actually
+	// prevented a second enqueue.
 	repo.state = domain.IndexerState{}
-	if err := w.Poll(t.Context()); err != nil {
+	w2 := newWorker(src, repo)
+	w2.SetEnqueuer(enq)
+	if err := w2.Poll(t.Context()); err != nil {
 		t.Fatalf("second (replay) poll: %v", err)
 	}
 	if got := countTaskType(enq.enqueued, usecase.WebhookDeliverTaskType); got != 1 {
