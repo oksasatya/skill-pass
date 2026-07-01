@@ -33,15 +33,16 @@ const indexLagSaneLimit uint64 = 500
 type Server struct {
 	repo usecase.CertificateRepo
 	src  usecase.EventSource
+	sub  usecase.EventSubscriber
 	log  *slog.Logger
 }
 
-// NewServer constructs a Server. Both repo and src must be non-nil.
-func NewServer(repo usecase.CertificateRepo, src usecase.EventSource, log *slog.Logger) *Server {
+// NewServer constructs a Server. repo, src, and sub must be non-nil.
+func NewServer(repo usecase.CertificateRepo, src usecase.EventSource, sub usecase.EventSubscriber, log *slog.Logger) *Server {
 	if log == nil {
 		log = slog.Default()
 	}
-	return &Server{repo: repo, src: src, log: log}
+	return &Server{repo: repo, src: src, sub: sub, log: log}
 }
 
 // GetCertificate returns a single certificate by token_id.
@@ -120,10 +121,38 @@ func (s *Server) GetIndexerStatus(ctx context.Context, _ *certv1.GetIndexerStatu
 	}, nil
 }
 
-// StreamCertificateEvents is a BE-2 seam — real server-streaming lands in BE-2 Task 3.
-// ponytail: stub returns Unimplemented; the gateway SSE bridge is wired in BE-2
-func (s *Server) StreamCertificateEvents(_ *certv1.StreamCertificateEventsRequest, _ grpc.ServerStreamingServer[certv1.CertificateEvent]) error {
-	return status.Error(codes.Unimplemented, "streaming lands in BE-2")
+// StreamCertificateEvents forwards live indexed-certificate events to the client, optionally
+// filtered by owner_address, until the client disconnects (stream context cancellation).
+// O(1) per forwarded event; an unparseable owner filter is treated as "no filter" — this
+// stream has no confidentiality boundary to protect (every certificate is publicly verifiable).
+func (s *Server) StreamCertificateEvents(req *certv1.StreamCertificateEventsRequest, stream grpc.ServerStreamingServer[certv1.CertificateEvent]) error {
+	events, unsubscribe := s.sub.Subscribe()
+	defer unsubscribe()
+
+	var ownerFilter domain.Address
+	if raw := req.GetOwnerAddress(); raw != "" {
+		if a, err := domain.NewAddress(raw); err == nil {
+			ownerFilter = a
+		}
+	}
+
+	ctx := stream.Context()
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case cert, ok := <-events:
+			if !ok {
+				return nil
+			}
+			if !ownerFilter.IsZero() && cert.Owner.String() != ownerFilter.String() {
+				continue
+			}
+			if err := stream.Send(&certv1.CertificateEvent{EventType: "issued", Certificate: toProto(cert)}); err != nil {
+				return err
+			}
+		}
+	}
 }
 
 // --- helpers ---

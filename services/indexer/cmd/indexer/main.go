@@ -28,6 +28,7 @@ import (
 	grpcadapter "github.com/oksasatya/skillpass/services/indexer/internal/adapter/grpc"
 	"github.com/oksasatya/skillpass/services/indexer/internal/adapter/postgres"
 	"github.com/oksasatya/skillpass/services/indexer/internal/config"
+	"github.com/oksasatya/skillpass/services/indexer/internal/platform/broadcast"
 	platformdb "github.com/oksasatya/skillpass/services/indexer/internal/platform/db"
 	"github.com/oksasatya/skillpass/services/indexer/internal/usecase"
 )
@@ -65,14 +66,17 @@ func main() {
 	}
 	defer src.Close()
 
+	broadcaster := broadcast.NewBroadcaster()
+
 	worker := usecase.NewWorker(src, repo, usecase.WorkerConfig{
 		ChainID:      cfg.ChainID,
 		StartBlock:   cfg.StartBlock,
 		BatchSize:    cfg.BatchSize,
 		PollInterval: cfg.PollInterval,
 	}, log)
+	worker.SetPublisher(broadcaster)
 
-	s := buildGRPCServer(repo, src, log)
+	s := buildGRPCServer(repo, src, broadcaster, log)
 
 	if err := runConcurrently(ctx, s, worker, cfg.GRPCAddr, log); err != nil {
 		log.Error("fatal", "err", err)
@@ -81,7 +85,7 @@ func main() {
 }
 
 // buildGRPCServer wires the gRPC server with interceptors, health, and reflection.
-func buildGRPCServer(repo usecase.CertificateRepo, src usecase.EventSource, log *slog.Logger) *grpc.Server {
+func buildGRPCServer(repo usecase.CertificateRepo, src usecase.EventSource, sub usecase.EventSubscriber, log *slog.Logger) *grpc.Server {
 	s := grpc.NewServer(
 		grpc.ChainUnaryInterceptor(
 			recoveryInterceptor(log),
@@ -89,7 +93,7 @@ func buildGRPCServer(repo usecase.CertificateRepo, src usecase.EventSource, log 
 		),
 	)
 
-	certv1.RegisterCertificateQueryServer(s, grpcadapter.NewServer(repo, src, log))
+	certv1.RegisterCertificateQueryServer(s, grpcadapter.NewServer(repo, src, sub, log))
 
 	healthSrv := health.NewServer()
 	grpc_health_v1.RegisterHealthServer(s, healthSrv)

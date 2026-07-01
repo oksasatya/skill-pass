@@ -270,3 +270,48 @@ func TestWorker_CtxCancel(t *testing.T) {
 		t.Fatal("Run did not stop after ctx cancel")
 	}
 }
+
+// fakePublisher implements usecase.EventPublisher for tests.
+type fakePublisher struct {
+	published []domain.Certificate
+}
+
+func (f *fakePublisher) Publish(c domain.Certificate) {
+	f.published = append(f.published, c)
+}
+
+func TestWorker_PublishesOnSuccessfulUpsert(t *testing.T) {
+	repo := newFakeRepo()
+	src := &fakeEventSource{
+		head: 1,
+		logs: map[uint64][]domain.IssuedLog{1: {sampleLog("1", 1)}},
+		certs: map[string]domain.OnchainCertificate{
+			"1": sampleCert("1"),
+		},
+	}
+	pub := &fakePublisher{}
+	w := newWorker(src, repo)
+	w.SetPublisher(pub)
+
+	if err := w.Poll(t.Context()); err != nil {
+		t.Fatalf("poll: %v", err)
+	}
+	if len(pub.published) != 1 || pub.published[0].TokenID != "1" {
+		t.Fatalf("want 1 published cert with TokenID=1, got %+v", pub.published)
+	}
+}
+
+func TestWorker_NilPublisher_NoPanic(t *testing.T) {
+	repo := newFakeRepo()
+	src := &fakeEventSource{
+		head: 1,
+		logs: map[uint64][]domain.IssuedLog{1: {sampleLog("1", 1)}},
+		certs: map[string]domain.OnchainCertificate{
+			"1": sampleCert("1"),
+		},
+	}
+	w := newWorker(src, repo) // SetPublisher never called
+	if err := w.Poll(t.Context()); err != nil {
+		t.Fatalf("poll: %v", err)
+	}
+}

@@ -24,7 +24,8 @@ type Worker struct {
 	repo CertificateRepo
 	cfg  WorkerConfig
 	log  *slog.Logger
-	next uint64 // next block to process; resolved on first poll
+	pub  EventPublisher // optional; nil-safe (see SetPublisher)
+	next uint64         // next block to process; resolved on first poll
 }
 
 // NewWorker constructs a Worker with its dependencies.
@@ -33,6 +34,12 @@ func NewWorker(src EventSource, repo CertificateRepo, cfg WorkerConfig, log *slo
 		log = slog.Default()
 	}
 	return &Worker{src: src, repo: repo, cfg: cfg, log: log}
+}
+
+// SetPublisher wires an optional live-event publisher. Call before Run(); safe to never
+// call — processLog no-ops the publish step when pub is nil.
+func (w *Worker) SetPublisher(pub EventPublisher) {
+	w.pub = pub
 }
 
 // Run is the long-lived poll loop. It stops when ctx is cancelled.
@@ -140,6 +147,9 @@ func (w *Worker) processLog(ctx context.Context, l domain.IssuedLog) error {
 	}
 	if err := w.repo.Upsert(ctx, cert); err != nil {
 		return fmt.Errorf("upsert %s: %w", l.TokenID, err)
+	}
+	if w.pub != nil {
+		w.pub.Publish(cert)
 	}
 	return nil
 }

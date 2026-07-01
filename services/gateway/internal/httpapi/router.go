@@ -25,6 +25,7 @@ func NewRouter(d Deps) http.Handler {
 	mux.HandleFunc("GET /healthz", Healthz)
 	mux.Handle("GET /readyz", Readyz(d.Health, d.RequestTimeout))
 	mux.Handle("GET /certificates", ListCertificates(d))
+	mux.Handle("GET /certificates/stream", StreamCertificateEvents(d))
 	mux.Handle("GET /certificates/{tokenId}", GetCertificate(d))
 	return mux
 }

@@ -63,15 +63,29 @@ func (f *fakeEventSource) GetCertificate(_ context.Context, _ string) (domain.On
 	return domain.OnchainCertificate{}, nil
 }
 
+// fakeSubscriber implements usecase.EventSubscriber for tests — a single-slot Broadcaster
+// stand-in so tests can push events directly without going through the Worker.
+type fakeSubscriber struct {
+	ch chan domain.Certificate
+}
+
+func newFakeSubscriber() *fakeSubscriber {
+	return &fakeSubscriber{ch: make(chan domain.Certificate, 8)}
+}
+
+func (f *fakeSubscriber) Subscribe() (<-chan domain.Certificate, func()) {
+	return f.ch, func() {}
+}
+
 // --- helpers ---
 
-func dialBufconn(t *testing.T, repo usecase.CertificateRepo, src usecase.EventSource) certv1.CertificateQueryClient {
+func dialBufconn(t *testing.T, repo usecase.CertificateRepo, src usecase.EventSource, sub usecase.EventSubscriber) certv1.CertificateQueryClient {
 	t.Helper()
 	lis := bufconn.Listen(bufSize)
 	t.Cleanup(func() { _ = lis.Close() })
 
 	srv := grpc.NewServer()
-	certv1.RegisterCertificateQueryServer(srv, grpcadapter.NewServer(repo, src, nil))
+	certv1.RegisterCertificateQueryServer(srv, grpcadapter.NewServer(repo, src, sub, nil))
 	t.Cleanup(srv.GracefulStop)
 
 	go func() { _ = srv.Serve(lis) }()
@@ -114,7 +128,7 @@ func TestGetCertificate_Found(t *testing.T) {
 		BlockHash:     "0xblockhash",
 	}
 	repo := &fakeRepo{cert: cert}
-	client := dialBufconn(t, repo, &fakeEventSource{})
+	client := dialBufconn(t, repo, &fakeEventSource{}, newFakeSubscriber())
 
 	resp, err := client.GetCertificate(context.Background(), &certv1.GetCertificateRequest{TokenId: "42"})
 	if err != nil {
@@ -140,7 +154,7 @@ func TestGetCertificate_Found(t *testing.T) {
 
 func TestGetCertificate_NotFound(t *testing.T) {
 	repo := &fakeRepo{certErr: fmt.Errorf("%w: token_id 99", domain.ErrNotFound)}
-	client := dialBufconn(t, repo, &fakeEventSource{})
+	client := dialBufconn(t, repo, &fakeEventSource{}, newFakeSubscriber())
 
 	_, err := client.GetCertificate(context.Background(), &certv1.GetCertificateRequest{TokenId: "99"})
 	if status.Code(err) != codes.NotFound {
@@ -149,7 +163,7 @@ func TestGetCertificate_NotFound(t *testing.T) {
 }
 
 func TestGetCertificate_EmptyTokenID(t *testing.T) {
-	client := dialBufconn(t, &fakeRepo{}, &fakeEventSource{})
+	client := dialBufconn(t, &fakeRepo{}, &fakeEventSource{}, newFakeSubscriber())
 
 	_, err := client.GetCertificate(context.Background(), &certv1.GetCertificateRequest{TokenId: ""})
 	if status.Code(err) != codes.InvalidArgument {
@@ -159,7 +173,7 @@ func TestGetCertificate_EmptyTokenID(t *testing.T) {
 
 func TestGetCertificate_InternalError(t *testing.T) {
 	repo := &fakeRepo{certErr: errors.New("db exploded")}
-	client := dialBufconn(t, repo, &fakeEventSource{})
+	client := dialBufconn(t, repo, &fakeEventSource{}, newFakeSubscriber())
 
 	_, err := client.GetCertificate(context.Background(), &certv1.GetCertificateRequest{TokenId: "1"})
 	if status.Code(err) != codes.Internal {
@@ -191,7 +205,7 @@ func TestListCertificates_MapsRequest(t *testing.T) {
 		HasMore:    true,
 	}
 	repo := &fakeRepo{listPage: page}
-	client := dialBufconn(t, repo, &fakeEventSource{})
+	client := dialBufconn(t, repo, &fakeEventSource{}, newFakeSubscriber())
 
 	resp, err := client.ListCertificates(context.Background(), &certv1.ListCertificatesRequest{
 		OwnerAddress: addr,
@@ -220,7 +234,7 @@ func TestGetIndexerStatus_LagAndHealthy(t *testing.T) {
 		count: 5,
 	}
 	src := &fakeEventSource{head: 100}
-	client := dialBufconn(t, repo, src)
+	client := dialBufconn(t, repo, src, newFakeSubscriber())
 
 	resp, err := client.GetIndexerStatus(context.Background(), &certv1.GetIndexerStatusRequest{})
 	if err != nil {
@@ -249,7 +263,7 @@ func TestGetIndexerStatus_ChainUnreachable_Degrades(t *testing.T) {
 		count: 3,
 	}
 	src := &fakeEventSource{headErr: errors.New("RPC timeout")}
-	client := dialBufconn(t, repo, src)
+	client := dialBufconn(t, repo, src, newFakeSubscriber())
 
 	resp, err := client.GetIndexerStatus(context.Background(), &certv1.GetIndexerStatusRequest{})
 	if err != nil {
@@ -268,7 +282,7 @@ func TestGetIndexerStatus_LagUnderflowGuard(t *testing.T) {
 	// last_processed > head (e.g. reorg/reset)
 	repo := &fakeRepo{state: domain.IndexerState{LastProcessedBlock: 200}}
 	src := &fakeEventSource{head: 100}
-	client := dialBufconn(t, repo, src)
+	client := dialBufconn(t, repo, src, newFakeSubscriber())
 
 	resp, err := client.GetIndexerStatus(context.Background(), &certv1.GetIndexerStatusRequest{})
 	if err != nil {
@@ -281,15 +295,81 @@ func TestGetIndexerStatus_LagUnderflowGuard(t *testing.T) {
 
 // --- StreamCertificateEvents ---
 
-func TestStreamCertificateEvents_Unimplemented(t *testing.T) {
-	client := dialBufconn(t, &fakeRepo{}, &fakeEventSource{})
+func TestStreamCertificateEvents_ForwardsPublishedEvent(t *testing.T) {
+	sub := newFakeSubscriber()
+	client := dialBufconn(t, &fakeRepo{}, &fakeEventSource{}, sub)
 
 	stream, err := client.StreamCertificateEvents(context.Background(), &certv1.StreamCertificateEventsRequest{})
 	if err != nil {
 		t.Fatalf("unexpected dial error: %v", err)
 	}
+
+	sub.ch <- domain.Certificate{
+		TokenID:     "1",
+		Owner:       mustAddr(t, "0xabcdef0123456789abcdef0123456789abcdef01"),
+		Title:       "T",
+		IssuerName:  "I",
+		TxHash:      "0x1",
+		BlockHash:   "0xb",
+		BlockNumber: 1,
+		IssuedAt:    time.Now(),
+	}
+
+	ev, err := stream.Recv()
+	if err != nil {
+		t.Fatalf("unexpected recv error: %v", err)
+	}
+	if ev.GetEventType() != "issued" {
+		t.Errorf("event_type: got %q, want issued", ev.GetEventType())
+	}
+	if ev.GetCertificate().GetTokenId() != "1" {
+		t.Errorf("token_id: got %q, want 1", ev.GetCertificate().GetTokenId())
+	}
+}
+
+func TestStreamCertificateEvents_FiltersByOwner(t *testing.T) {
+	const wantOwner = "0xabcdef0123456789abcdef0123456789abcdef01"
+	sub := newFakeSubscriber()
+	client := dialBufconn(t, &fakeRepo{}, &fakeEventSource{}, sub)
+
+	stream, err := client.StreamCertificateEvents(context.Background(), &certv1.StreamCertificateEventsRequest{OwnerAddress: wantOwner})
+	if err != nil {
+		t.Fatalf("unexpected dial error: %v", err)
+	}
+
+	// other owner — must be filtered out
+	sub.ch <- domain.Certificate{
+		TokenID: "1", Owner: mustAddr(t, "0x1111111111111111111111111111111111111111"),
+		Title: "T", IssuerName: "I", TxHash: "0x1", BlockHash: "0xb", IssuedAt: time.Now(),
+	}
+	// matching owner — must be delivered
+	sub.ch <- domain.Certificate{
+		TokenID: "2", Owner: mustAddr(t, wantOwner),
+		Title: "T", IssuerName: "I", TxHash: "0x2", BlockHash: "0xb", IssuedAt: time.Now(),
+	}
+
+	ev, err := stream.Recv()
+	if err != nil {
+		t.Fatalf("unexpected recv error: %v", err)
+	}
+	if ev.GetCertificate().GetTokenId() != "2" {
+		t.Errorf("token_id: got %q, want 2 (owner-filtered)", ev.GetCertificate().GetTokenId())
+	}
+}
+
+func TestStreamCertificateEvents_StopsOnClientCancel(t *testing.T) {
+	sub := newFakeSubscriber()
+	client := dialBufconn(t, &fakeRepo{}, &fakeEventSource{}, sub)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	stream, err := client.StreamCertificateEvents(ctx, &certv1.StreamCertificateEventsRequest{})
+	if err != nil {
+		t.Fatalf("unexpected dial error: %v", err)
+	}
+	cancel()
+
 	_, recvErr := stream.Recv()
-	if status.Code(recvErr) != codes.Unimplemented {
-		t.Errorf("want codes.Unimplemented, got %v", status.Code(recvErr))
+	if status.Code(recvErr) != codes.Canceled {
+		t.Errorf("want codes.Canceled, got %v", status.Code(recvErr))
 	}
 }

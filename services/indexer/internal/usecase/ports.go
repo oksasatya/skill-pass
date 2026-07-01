@@ -54,3 +54,17 @@ type EventSource interface {
 	// GetCertificate backfills the full on-chain certificate struct via eth_call getCertificate(tokenId).
 	GetCertificate(ctx context.Context, tokenID string) (domain.OnchainCertificate, error)
 }
+
+// EventPublisher notifies live subscribers when a certificate is indexed. Optional — the
+// Worker is nil-safe if none is wired.
+type EventPublisher interface {
+	Publish(c domain.Certificate)
+}
+
+// EventSubscriber lets the gRPC adapter subscribe to live indexed-certificate events
+// (implemented by the in-process broadcaster in platform/broadcast).
+type EventSubscriber interface {
+	// Subscribe registers a new subscriber and returns its channel plus an unsubscribe func.
+	// Callers MUST call unsubscribe (e.g. via defer) to avoid a goroutine/channel leak.
+	Subscribe() (<-chan domain.Certificate, func())
+}
