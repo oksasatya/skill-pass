@@ -14,6 +14,14 @@ import (
 // assumption (see the Phase 4 design spec).
 const reorgWindow = 12
 
+// WebhookMaxRetry bounds delivery attempts for webhook:deliver tasks -- both the fast-path
+// enqueue here and the webhook:sweep re-enqueue (asynqjobs/webhook_sweep.go) use this same
+// exported const, so a swept retry doesn't silently get a different retry budget than the
+// original enqueue. Per the Phase 7 design spec: spans several hours of retry attempts for
+// an external endpoint that's temporarily down, without asynq's default (25) keeping a
+// permanently-dead endpoint's task alive for days.
+const WebhookMaxRetry = 8
+
 // WorkerConfig holds tunable parameters for the indexer worker.
 type WorkerConfig struct {
 	ChainID      int64
@@ -230,7 +238,7 @@ func (w *Worker) processLog(ctx context.Context, l domain.IssuedLog) error {
 		w.pub.Publish(cert)
 	}
 	if w.enqueuer != nil {
-		if err := w.enqueuer.EnqueueUnique(ctx, TrendRefreshTaskType, TrendRefreshTaskType, nil); err != nil {
+		if err := w.enqueuer.EnqueueUnique(ctx, TrendRefreshTaskType, TrendRefreshTaskType, nil, 0); err != nil {
 			// Non-fatal: ingest correctness never depends on the cache-refresh job succeeding —
 			// a failed enqueue just means the trend cache stays stale until the cron backstop runs.
 			w.log.Warn("enqueue trend refresh", "err", err)
@@ -261,7 +269,7 @@ func (w *Worker) enqueueWebhook(ctx context.Context, cert domain.Certificate) er
 		return nil // already recorded for this exact on-chain event -- nothing to do
 	}
 	taskID := fmt.Sprintf("%s:%d", WebhookDeliverTaskType, id)
-	if err := w.enqueuer.EnqueueUnique(ctx, WebhookDeliverTaskType, taskID, payload); err != nil {
+	if err := w.enqueuer.EnqueueUnique(ctx, WebhookDeliverTaskType, taskID, payload, WebhookMaxRetry); err != nil {
 		// A failed enqueue here is fully recovered by webhook:sweep, since the outbox row
 		// stays enqueued_at IS NULL until something successfully enqueues it.
 		w.log.Warn("enqueue webhook deliver", "err", err)

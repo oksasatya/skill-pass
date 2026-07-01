@@ -29,14 +29,16 @@ func (f *fakeOutboxLister) MarkWebhookOutboxEnqueued(_ context.Context, id int64
 
 type fakeSweepEnqueuer struct {
 	enqueuedIDs []string
+	maxRetries  []int  // parallel to enqueuedIDs
 	failFor     string // taskID that should fail, if set
 }
 
-func (f *fakeSweepEnqueuer) EnqueueUnique(_ context.Context, _, taskID string, _ []byte) error {
+func (f *fakeSweepEnqueuer) EnqueueUnique(_ context.Context, _, taskID string, _ []byte, maxRetry int) error {
 	if taskID == f.failFor {
 		return errors.New("fake: enqueue failed")
 	}
 	f.enqueuedIDs = append(f.enqueuedIDs, taskID)
+	f.maxRetries = append(f.maxRetries, maxRetry)
 	return nil
 }
 
@@ -56,6 +58,13 @@ func TestWebhookSweepHandler_ReenqueuesAllUnenqueuedRows(t *testing.T) {
 	}
 	if len(lister.marked) != 2 {
 		t.Fatalf("got %d marked-enqueued calls, want 2", len(lister.marked))
+	}
+	// Final-review finding: a swept re-enqueue must use the same usecase.WebhookMaxRetry
+	// budget as the original fast-path enqueue, not asynq's default (25).
+	for i, mr := range enq.maxRetries {
+		if mr != usecase.WebhookMaxRetry {
+			t.Fatalf("enqueuedIDs[%d] maxRetry = %d, want %d", i, mr, usecase.WebhookMaxRetry)
+		}
 	}
 }
 

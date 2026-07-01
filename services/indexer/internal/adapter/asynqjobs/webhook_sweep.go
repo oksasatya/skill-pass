@@ -54,7 +54,7 @@ func (h *WebhookSweepHandler) ProcessTask(ctx context.Context, _ *asynq.Task) er
 	}
 	for _, e := range entries {
 		taskID := fmt.Sprintf("%s:%d", usecase.WebhookDeliverTaskType, e.ID)
-		if err := h.enqueuer.EnqueueUnique(ctx, usecase.WebhookDeliverTaskType, taskID, e.Payload); err != nil {
+		if err := h.enqueuer.EnqueueUnique(ctx, usecase.WebhookDeliverTaskType, taskID, e.Payload, usecase.WebhookMaxRetry); err != nil {
 			h.log.Warn("sweep: enqueue webhook deliver", "id", e.ID, "err", err)
 			continue // don't let one bad row block the rest of the sweep
 		}

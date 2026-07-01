@@ -118,6 +118,8 @@ const TrendRefreshTaskType = "trend:refresh"
 // is nil-safe if none is wired.
 type TaskEnqueuer interface {
 	// EnqueueUnique enqueues a task, deduped by taskID: a second call with the same taskID
-	// while one is still pending/processing is a no-op. payload may be nil.
-	EnqueueUnique(ctx context.Context, taskType, taskID string, payload []byte) error
+	// while one is still pending/processing is a no-op. payload may be nil. maxRetry bounds
+	// delivery attempts before asynq gives up; 0 means "use asynq's own default" (currently
+	// 25). Plain int, not an asynq type, so this port stays hexagonal-lite.
+	EnqueueUnique(ctx context.Context, taskType, taskID string, payload []byte, maxRetry int) error
 }

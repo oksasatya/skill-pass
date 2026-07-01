@@ -435,13 +435,15 @@ func TestWorker_Reconcile_ColdStart_IsNoop(t *testing.T) {
 
 // fakeEnqueuer implements usecase.TaskEnqueuer for tests.
 type fakeEnqueuer struct {
-	enqueued []string // taskType per call
-	payloads [][]byte // payload per call, parallel to enqueued
+	enqueued   []string // taskType per call
+	payloads   [][]byte // payload per call, parallel to enqueued
+	maxRetries []int    // maxRetry per call, parallel to enqueued
 }
 
-func (f *fakeEnqueuer) EnqueueUnique(_ context.Context, taskType, _ string, payload []byte) error {
+func (f *fakeEnqueuer) EnqueueUnique(_ context.Context, taskType, _ string, payload []byte, maxRetry int) error {
 	f.enqueued = append(f.enqueued, taskType)
 	f.payloads = append(f.payloads, payload)
+	f.maxRetries = append(f.maxRetries, maxRetry)
 	return nil
 }
 
@@ -497,6 +499,14 @@ func TestWorker_EnqueuesWebhookDeliver_OnNewCertificate(t *testing.T) {
 	}
 	if countTaskType(enq.enqueued, usecase.WebhookDeliverTaskType) != 1 {
 		t.Fatalf("want 1 enqueue of %q, got %v", usecase.WebhookDeliverTaskType, enq.enqueued)
+	}
+	// Final-review finding: webhook:deliver must use usecase.WebhookMaxRetry (8), not
+	// asynq's own default (25) -- fast path and the sweep backstop must share one retry
+	// budget, not silently diverge.
+	for i, taskType := range enq.enqueued {
+		if taskType == usecase.WebhookDeliverTaskType && enq.maxRetries[i] != usecase.WebhookMaxRetry {
+			t.Fatalf("webhook:deliver maxRetry = %d, want %d", enq.maxRetries[i], usecase.WebhookMaxRetry)
+		}
 	}
 }
 

@@ -29,10 +29,15 @@ func NewEnqueuer(client *asynq.Client) *Enqueuer {
 }
 
 // EnqueueUnique enqueues taskType, deduped by taskID within uniqueTTL — a duplicate call
-// while one is pending is absorbed as a no-op, not an error. payload may be nil.
-func (e *Enqueuer) EnqueueUnique(ctx context.Context, taskType, taskID string, payload []byte) error {
+// while one is pending is absorbed as a no-op, not an error. payload may be nil. maxRetry
+// <= 0 leaves asynq's own default (currently 25) in place.
+func (e *Enqueuer) EnqueueUnique(ctx context.Context, taskType, taskID string, payload []byte, maxRetry int) error {
+	opts := []asynq.Option{asynq.TaskID(taskID), asynq.Unique(uniqueTTL)}
+	if maxRetry > 0 {
+		opts = append(opts, asynq.MaxRetry(maxRetry))
+	}
 	task := asynq.NewTask(taskType, payload)
-	_, err := e.client.EnqueueContext(ctx, task, asynq.TaskID(taskID), asynq.Unique(uniqueTTL))
+	_, err := e.client.EnqueueContext(ctx, task, opts...)
 	// Both indicate an equivalent task is already pending/active: the common case is
 	// ErrDuplicateTask (the Unique key is still held); ErrTaskIDConflict is the narrow
 	// window where the unique key expired but the fixed TaskID row is still present.
