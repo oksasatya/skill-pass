@@ -14,7 +14,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/hibiken/asynq"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -24,6 +26,8 @@ import (
 	"google.golang.org/grpc/status"
 
 	certv1 "github.com/oksasatya/skillpass/proto/gen/go/skillpass/cert/v1"
+	"github.com/oksasatya/skillpass/services/indexer/internal/adapter/asynqjobs"
+	"github.com/oksasatya/skillpass/services/indexer/internal/adapter/cache"
 	"github.com/oksasatya/skillpass/services/indexer/internal/adapter/chain"
 	grpcadapter "github.com/oksasatya/skillpass/services/indexer/internal/adapter/grpc"
 	"github.com/oksasatya/skillpass/services/indexer/internal/adapter/postgres"
@@ -78,9 +82,29 @@ func main() {
 
 	trendService := usecase.NewTrendService(repo, cfg.ChainID)
 
+	redisClient := redis.NewClient(&redis.Options{Addr: cfg.RedisAddr})
+	defer redisClient.Close() //nolint:errcheck // best-effort close on process exit
+
+	trendService.SetCache(cache.NewRedisTrendCache(redisClient))
+
+	asynqRedisOpt := asynq.RedisClientOpt{Addr: cfg.RedisAddr}
+	asynqClient := asynq.NewClient(asynqRedisOpt)
+	defer asynqClient.Close() //nolint:errcheck // best-effort close on process exit
+
+	worker.SetEnqueuer(asynqjobs.NewEnqueuer(asynqClient))
+
 	s := buildGRPCServer(repo, src, broadcaster, trendService, log)
 
-	if err := runConcurrently(ctx, s, worker, cfg.GRPCAddr, log); err != nil {
+	asynqServer, asynqMux, scheduler := buildAsynqRuntime(asynqRedisOpt, trendService, log)
+
+	svc := runtimeServices{
+		grpcServer:  s,
+		worker:      worker,
+		asynqServer: asynqServer,
+		asynqMux:    asynqMux,
+		scheduler:   scheduler,
+	}
+	if err := runConcurrently(ctx, svc, cfg.GRPCAddr, log); err != nil {
 		log.Error("fatal", "err", err)
 		os.Exit(1)
 	}
@@ -106,12 +130,42 @@ func buildGRPCServer(repo usecase.CertificateRepo, src usecase.EventSource, sub 
 	return s
 }
 
-// runConcurrently starts the worker and gRPC server, monitors ctx for shutdown.
-func runConcurrently(ctx context.Context, s *grpc.Server, worker *usecase.Worker, addr string, log *slog.Logger) error {
+// buildAsynqRuntime wires the asynq processing server (handles enqueued refresh tasks) and
+// scheduler (15-minute cron backstop, in case an event-triggered enqueue is ever missed).
+// Returns the mux alongside the server since Run(mux) needs the exact same instance the
+// handler was registered on.
+func buildAsynqRuntime(redisOpt asynq.RedisClientOpt, trend *usecase.TrendService, log *slog.Logger) (*asynq.Server, *asynq.ServeMux, *asynq.Scheduler) {
+	server := asynq.NewServer(redisOpt, asynq.Config{Concurrency: 5})
+
+	mux := asynq.NewServeMux()
+	mux.Handle(usecase.TrendRefreshTaskType, asynqjobs.NewRefreshTrendCacheHandler(trend, log))
+
+	scheduler := asynq.NewScheduler(redisOpt, nil)
+	if _, err := scheduler.Register("*/15 * * * *", asynqjobs.NewRefreshTrendCacheTask()); err != nil {
+		log.Error("register trend-refresh cron", "err", err)
+	}
+
+	return server, mux, scheduler
+}
+
+// runtimeServices bundles the long-running components runConcurrently supervises —
+// introduced once adding the asynq server/scheduler would have pushed runConcurrently
+// past the Sonar-preferred 5-param ceiling.
+type runtimeServices struct {
+	grpcServer  *grpc.Server
+	worker      *usecase.Worker
+	asynqServer *asynq.Server
+	asynqMux    *asynq.ServeMux
+	scheduler   *asynq.Scheduler
+}
+
+// runConcurrently starts the worker, gRPC server, asynq processing server, and asynq
+// scheduler; monitors ctx for graceful shutdown of all four.
+func runConcurrently(ctx context.Context, svc runtimeServices, addr string, log *slog.Logger) error {
 	g, gCtx := errgroup.WithContext(ctx)
 
 	g.Go(func() error {
-		return worker.Run(gCtx)
+		return svc.worker.Run(gCtx)
 	})
 
 	g.Go(func() error {
@@ -120,12 +174,22 @@ func runConcurrently(ctx context.Context, s *grpc.Server, worker *usecase.Worker
 			return err
 		}
 		log.Info("gRPC server listening", "addr", addr)
-		return s.Serve(lis)
+		return svc.grpcServer.Serve(lis)
+	})
+
+	g.Go(func() error {
+		return svc.asynqServer.Run(svc.asynqMux)
+	})
+
+	g.Go(func() error {
+		return svc.scheduler.Run()
 	})
 
 	g.Go(func() error {
 		<-gCtx.Done()
-		s.GracefulStop()
+		svc.grpcServer.GracefulStop()
+		svc.asynqServer.Shutdown()
+		svc.scheduler.Shutdown()
 		return nil
 	})
 
