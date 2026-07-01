@@ -16,6 +16,7 @@ type Config struct {
 	ContractAddress string
 	ChainID         int64
 	GRPCAddr        string
+	RedisAddr       string
 	StartBlock      uint64
 	BatchSize       uint64
 	PollInterval    time.Duration
@@ -44,6 +45,10 @@ func Load() (Config, error) {
 	cfg.ChainID, err = strconv.ParseInt(chainStr, 10, 64)
 	if err != nil {
 		return Config{}, fmt.Errorf("CHAIN_ID: %w", err)
+	}
+
+	if cfg.RedisAddr, err = mustenv("REDIS_ADDR"); err != nil {
+		return Config{}, err
 	}
 
 	cfg.GRPCAddr = getenv("GRPC_ADDR", ":50051")
