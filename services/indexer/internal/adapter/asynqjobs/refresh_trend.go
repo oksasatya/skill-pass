@@ -43,7 +43,8 @@ func NewRefreshTrendCacheHandler(trend trendRefresher, log *slog.Logger) *Refres
 }
 
 // ProcessTask satisfies asynq.Handler. O(number of bucket/preset combinations) — a small,
-// fixed table (9 combinations as of Phase 5), not proportional to certificate count.
+// fixed table (7 combinations as of Phase 5: day 30d/90d/365d, week 12w/52w, month 12m/24m),
+// not proportional to certificate count.
 func (h *RefreshTrendCacheHandler) ProcessTask(ctx context.Context, _ *asynq.Task) error {
 	now := time.Now()
 	for bucket, presets := range usecase.AllowedPresets() {
