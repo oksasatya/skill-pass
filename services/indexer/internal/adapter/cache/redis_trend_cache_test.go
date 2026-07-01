@@ -12,7 +12,7 @@ import (
 	"github.com/oksasatya/skillpass/services/indexer/internal/usecase"
 )
 
-func newTestCache(t *testing.T) *cache.RedisTrendCache {
+func newTestCache(t *testing.T) (*cache.RedisTrendCache, *miniredis.Miniredis) {
 	t.Helper()
 	mr, err := miniredis.Run()
 	if err != nil {
@@ -22,11 +22,11 @@ func newTestCache(t *testing.T) *cache.RedisTrendCache {
 
 	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	t.Cleanup(func() { _ = client.Close() })
-	return cache.NewRedisTrendCache(client)
+	return cache.NewRedisTrendCache(client), mr
 }
 
 func TestRedisTrendCache_MissThenSetThenHit(t *testing.T) {
-	c := newTestCache(t)
+	c, _ := newTestCache(t)
 	ctx := context.Background()
 
 	_, ok, err := c.Get(ctx, "trend:v1:1:1:30d")
@@ -51,5 +51,23 @@ func TestRedisTrendCache_MissThenSetThenHit(t *testing.T) {
 	}
 	if len(got) != 1 || got[0].Count != 3 {
 		t.Fatalf("got %+v, want %+v", got, want)
+	}
+}
+
+func TestRedisTrendCache_Get_InvalidJSON_ReturnsError(t *testing.T) {
+	c, mr := newTestCache(t)
+	ctx := context.Background()
+
+	const key = "trend:v1:1:1:30d"
+	if err := mr.Set(key, "not-json"); err != nil {
+		t.Fatalf("seed invalid value: %v", err)
+	}
+
+	_, ok, err := c.Get(ctx, key)
+	if err == nil {
+		t.Fatal("expected an unmarshal error for a corrupted cache entry, got nil")
+	}
+	if ok {
+		t.Fatal("ok must be false when Get returns an error")
 	}
 }
