@@ -42,6 +42,10 @@ func (f *fakeCertClient) GetIndexerStatus(_ context.Context, _ *certv1.GetIndexe
 	return nil, status.Error(codes.Unimplemented, "not used in this test")
 }
 
+func (f *fakeCertClient) GetIssuanceTrend(_ context.Context, _ *certv1.GetIssuanceTrendRequest, _ ...grpc.CallOption) (*certv1.GetIssuanceTrendResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "not used in this test")
+}
+
 func sampleProtoCert(tokenID string) *certv1.Certificate {
 	return &certv1.Certificate{
 		TokenId:       tokenID,

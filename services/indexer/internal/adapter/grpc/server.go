@@ -4,7 +4,9 @@ package grpc
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -31,18 +33,19 @@ const indexLagSaneLimit uint64 = 500
 
 // Server implements certv1.CertificateQueryServer over the read-model ports.
 type Server struct {
-	repo usecase.CertificateRepo
-	src  usecase.EventSource
-	sub  usecase.EventSubscriber
-	log  *slog.Logger
+	repo  usecase.CertificateRepo
+	src   usecase.EventSource
+	sub   usecase.EventSubscriber
+	trend *usecase.TrendService
+	log   *slog.Logger
 }
 
-// NewServer constructs a Server. repo, src, and sub must be non-nil.
-func NewServer(repo usecase.CertificateRepo, src usecase.EventSource, sub usecase.EventSubscriber, log *slog.Logger) *Server {
+// NewServer constructs a Server. repo, src, sub, and trend must be non-nil.
+func NewServer(repo usecase.CertificateRepo, src usecase.EventSource, sub usecase.EventSubscriber, trend *usecase.TrendService, log *slog.Logger) *Server {
 	if log == nil {
 		log = slog.Default()
 	}
-	return &Server{repo: repo, src: src, sub: sub, log: log}
+	return &Server{repo: repo, src: src, sub: sub, trend: trend, log: log}
 }
 
 // GetCertificate returns a single certificate by token_id.
@@ -119,6 +122,49 @@ func (s *Server) GetIndexerStatus(ctx context.Context, _ *certv1.GetIndexerStatu
 		Healthy:            healthy,
 		TotalCertificates:  uint64(count), //nolint:gosec // count is always non-negative
 	}, nil
+}
+
+// GetIssuanceTrend returns a zero-filled certificate-issuance time series for the requested
+// bucket granularity and range preset.
+func (s *Server) GetIssuanceTrend(ctx context.Context, req *certv1.GetIssuanceTrendRequest) (*certv1.GetIssuanceTrendResponse, error) {
+	bucket, err := fromProtoBucket(req.GetBucket())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+
+	since, err := usecase.RangePresetToSince(bucket, req.GetRangePreset(), time.Now())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+
+	points, err := s.trend.GetTrend(ctx, bucket, since, req.GetRangePreset())
+	if err != nil {
+		s.log.Error("GetIssuanceTrend", "err", err)
+		return nil, status.Error(codes.Internal, errInternal)
+	}
+
+	protoPoints := make([]*certv1.TrendPoint, 0, len(points))
+	for _, p := range points {
+		protoPoints = append(protoPoints, &certv1.TrendPoint{
+			BucketStart: timestamppb.New(p.BucketStart),
+			Count:       uint64(p.Count), //nolint:gosec // count is always non-negative
+		})
+	}
+	return &certv1.GetIssuanceTrendResponse{Points: protoPoints}, nil
+}
+
+// fromProtoBucket maps the proto enum to the usecase-layer type — keeps usecase framework-free.
+func fromProtoBucket(b certv1.TrendBucket) (usecase.TrendBucket, error) {
+	switch b {
+	case certv1.TrendBucket_TREND_BUCKET_DAY:
+		return usecase.TrendBucketDay, nil
+	case certv1.TrendBucket_TREND_BUCKET_WEEK:
+		return usecase.TrendBucketWeek, nil
+	case certv1.TrendBucket_TREND_BUCKET_MONTH:
+		return usecase.TrendBucketMonth, nil
+	default:
+		return 0, fmt.Errorf("%w: bucket must be day, week, or month", usecase.ErrInvalidTrendRequest)
+	}
 }
 
 // StreamCertificateEvents forwards live indexed-certificate events to the client, optionally

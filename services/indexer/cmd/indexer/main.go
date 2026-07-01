@@ -76,7 +76,9 @@ func main() {
 	}, log)
 	worker.SetPublisher(broadcaster)
 
-	s := buildGRPCServer(repo, src, broadcaster, log)
+	trendService := usecase.NewTrendService(repo, cfg.ChainID)
+
+	s := buildGRPCServer(repo, src, broadcaster, trendService, log)
 
 	if err := runConcurrently(ctx, s, worker, cfg.GRPCAddr, log); err != nil {
 		log.Error("fatal", "err", err)
@@ -85,7 +87,7 @@ func main() {
 }
 
 // buildGRPCServer wires the gRPC server with interceptors, health, and reflection.
-func buildGRPCServer(repo usecase.CertificateRepo, src usecase.EventSource, sub usecase.EventSubscriber, log *slog.Logger) *grpc.Server {
+func buildGRPCServer(repo usecase.CertificateRepo, src usecase.EventSource, sub usecase.EventSubscriber, trend *usecase.TrendService, log *slog.Logger) *grpc.Server {
 	s := grpc.NewServer(
 		grpc.ChainUnaryInterceptor(
 			recoveryInterceptor(log),
@@ -93,7 +95,7 @@ func buildGRPCServer(repo usecase.CertificateRepo, src usecase.EventSource, sub 
 		),
 	)
 
-	certv1.RegisterCertificateQueryServer(s, grpcadapter.NewServer(repo, src, sub, log))
+	certv1.RegisterCertificateQueryServer(s, grpcadapter.NewServer(repo, src, sub, trend, log))
 
 	healthSrv := health.NewServer()
 	grpc_health_v1.RegisterHealthServer(s, healthSrv)
