@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"time"
 
 	"github.com/oksasatya/skillpass/services/indexer/internal/domain"
 )
@@ -45,6 +46,10 @@ type CertificateRepo interface {
 	// DeleteFromBlock removes all certificates at or above blockNumber for chainID —
 	// used by reorg reconcile to roll back the confirmation window.
 	DeleteFromBlock(ctx context.Context, chainID int64, blockNumber uint64) error
+
+	// GetIssuanceTrend returns raw (non-zero-filled) trend rows since the given time,
+	// bucketed by day/week/month. O(certs in range) via the issued_at index.
+	GetIssuanceTrend(ctx context.Context, bucket TrendBucket, since time.Time) ([]TrendPoint, error)
 }
 
 // EventSource is the chain read side (ethclient adapter implements in T5).
@@ -74,4 +79,11 @@ type EventSubscriber interface {
 	// Subscribe registers a new subscriber and returns its channel plus an unsubscribe func.
 	// Callers MUST call unsubscribe (e.g. via defer) to avoid a goroutine/channel leak.
 	Subscribe() (<-chan domain.Certificate, func())
+}
+
+// TrendCache lets TrendService cache computed trend results (Phase 6 wires a Redis-backed
+// implementation; TrendService is nil-safe if none is set).
+type TrendCache interface {
+	Get(ctx context.Context, key string) ([]TrendPoint, bool, error)
+	Set(ctx context.Context, key string, points []TrendPoint) error
 }

@@ -100,6 +100,11 @@ func (r *fakeRepo) DeleteFromBlock(_ context.Context, _ int64, blockNumber uint6
 	return nil
 }
 
+// GetIssuanceTrend is unused by worker tests; stubbed only to satisfy usecase.CertificateRepo.
+func (r *fakeRepo) GetIssuanceTrend(_ context.Context, _ usecase.TrendBucket, _ time.Time) ([]usecase.TrendPoint, error) {
+	return nil, nil
+}
+
 // helpers
 
 func mustAddr(s string) domain.Address {
