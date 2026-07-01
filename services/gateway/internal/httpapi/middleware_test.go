@@ -39,3 +39,19 @@ func TestWithObservability_PassesThroughNormalResponse(t *testing.T) {
 		t.Fatalf("status = %d, want 200", w.Code)
 	}
 }
+
+// Regression: the observability wrapper must not hide http.Flusher from a streaming handler
+// (e.g. StreamCertificateEvents) — a naive ResponseWriter wrapper breaks SSE silently.
+func TestWithObservability_PreservesFlusher(t *testing.T) {
+	streaming := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if _, ok := w.(http.Flusher); !ok {
+			t.Error("http.Flusher not available through the observability wrapper")
+		}
+	})
+	h := WithObservability(streaming, slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	req := httptest.NewRequest(http.MethodGet, "/certificates/stream", nil)
+	w := httptest.NewRecorder() // *httptest.ResponseRecorder implements http.Flusher
+
+	h.ServeHTTP(w, req)
+}

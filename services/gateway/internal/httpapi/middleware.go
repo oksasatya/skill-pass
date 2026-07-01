@@ -19,6 +19,15 @@ func (r *statusRecorder) WriteHeader(code int) {
 	r.ResponseWriter.WriteHeader(code)
 }
 
+// Flush forwards to the underlying ResponseWriter's http.Flusher. Without this, wrapping a
+// streaming handler (SSE) in this recorder would silently break it: the handler's own
+// `w.(http.Flusher)` type assertion sees this wrapper, not the real writer, and fails.
+func (r *statusRecorder) Flush() {
+	if f, ok := r.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
 // WithObservability wraps h with panic recovery and structured request logging, mirroring
 // the gRPC server's recoveryInterceptor/loggingInterceptor pair (cmd/indexer/main.go).
 func WithObservability(h http.Handler, log *slog.Logger) http.Handler {
