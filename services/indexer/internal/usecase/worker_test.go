@@ -3,6 +3,7 @@ package usecase_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -12,18 +13,22 @@ import (
 
 // fakeEventSource implements usecase.EventSource for tests.
 type fakeEventSource struct {
-	head    uint64
-	logs    map[uint64][]domain.IssuedLog // keyed by fromBlock for simplicity
-	certs   map[string]domain.OnchainCertificate
-	certErr error // if set, GetCertificate returns this error
+	head        uint64
+	logs        map[uint64][]domain.IssuedLog // keyed by fromBlock for simplicity
+	certs       map[string]domain.OnchainCertificate
+	certErr     error             // if set, GetCertificate returns this error
+	blockHashes map[uint64]string // canonical hash override per block; deterministic default if unset
 }
 
 func (f *fakeEventSource) HeadBlock(_ context.Context) (uint64, error) {
 	return f.head, nil
 }
 
-func (f *fakeEventSource) BlockHash(_ context.Context, _ uint64) (string, error) {
-	return "0xfakehash", nil
+func (f *fakeEventSource) BlockHash(_ context.Context, blockNumber uint64) (string, error) {
+	if h, ok := f.blockHashes[blockNumber]; ok {
+		return h, nil
+	}
+	return fmt.Sprintf("0xcanonical%d", blockNumber), nil
 }
 
 func (f *fakeEventSource) IssuedLogs(_ context.Context, from, to uint64) ([]domain.IssuedLog, error) {
@@ -166,7 +171,7 @@ func TestWorker_ColdStart(t *testing.T) {
 
 func TestWorker_Resume(t *testing.T) {
 	repo := newFakeRepo()
-	repo.state = domain.IndexerState{ChainID: 31337, LastProcessedBlock: 3, LastProcessedHash: "0xaabbcc"}
+	repo.state = domain.IndexerState{ChainID: 31337, LastProcessedBlock: 3, LastProcessedHash: "0xcanonical3"}
 
 	src := &fakeEventSource{
 		head: 7,
@@ -327,5 +332,92 @@ func TestWorker_NilPublisher_NoPanic(t *testing.T) {
 	w := newWorker(src, repo) // SetPublisher never called
 	if err := w.Poll(t.Context()); err != nil {
 		t.Fatalf("poll: %v", err)
+	}
+}
+
+func TestWorker_Reconcile_NoReorg_IsNoop(t *testing.T) {
+	repo := newFakeRepo()
+	repo.state = domain.IndexerState{ChainID: 31337, LastProcessedBlock: 10, LastProcessedHash: "0xcanonical10"}
+	repo.certs["1"] = domain.Certificate{TokenID: "1", BlockNumber: 5}
+
+	src := &fakeEventSource{head: 10} // BlockHash(10) defaults to "0xcanonical10" — matches stored
+	w := newWorker(src, repo)
+
+	if err := w.Poll(t.Context()); err != nil {
+		t.Fatalf("poll: %v", err)
+	}
+	if _, ok := repo.certs["1"]; !ok {
+		t.Fatal("no reorg should have occurred — cert must survive")
+	}
+}
+
+func TestWorker_Reconcile_DetectsReorgAndRewinds(t *testing.T) {
+	repo := newFakeRepo()
+	repo.state = domain.IndexerState{ChainID: 31337, LastProcessedBlock: 20, LastProcessedHash: "0xstale-hash"}
+	repo.certs["1"] = domain.Certificate{TokenID: "1", BlockNumber: 5}  // below the rewind window — survives
+	repo.certs["2"] = domain.Certificate{TokenID: "2", BlockNumber: 15} // within [20-12+1, 20] — deleted
+
+	src := &fakeEventSource{
+		head: 20,
+		blockHashes: map[uint64]string{
+			20: "0xcanonical20", // mismatches stored "0xstale-hash" -> reorg detected
+			8:  "0xcanonical8",  // rewindTo = 20-12 = 8
+		},
+		// no logs configured for [9,20] — nothing re-appears there in this test
+	}
+	w := newWorker(src, repo)
+
+	if err := w.Poll(t.Context()); err != nil {
+		t.Fatalf("poll: %v", err)
+	}
+
+	if _, ok := repo.certs["1"]; !ok {
+		t.Fatal("token 1 (block 5, below rewind point) must survive")
+	}
+	if _, ok := repo.certs["2"]; ok {
+		t.Fatal("token 2 (block 15, within rewound window) must be deleted")
+	}
+	// reconcile() rewinds the checkpoint to 8, but poll() does not return early — it falls
+	// straight through to the normal fetch-and-advance logic using the now-rewound w.next,
+	// re-scanning [9,20] in the SAME Poll() call (no logs there in this test, so nothing is
+	// re-added) and advancing the checkpoint to head. This converges in one poll cycle
+	// instead of requiring an extra tick — the final observable state is at head, not at
+	// the intermediate rewound point.
+	if repo.state.LastProcessedBlock != 20 {
+		t.Fatalf("state.LastProcessedBlock = %d, want 20 (rewound to 8, then re-scanned forward to head in the same Poll() call)", repo.state.LastProcessedBlock)
+	}
+	if repo.state.LastProcessedHash != "0xcanonical20" {
+		t.Fatalf("state.LastProcessedHash = %q, want the canonical hash of head (20)", repo.state.LastProcessedHash)
+	}
+}
+
+func TestWorker_Reconcile_ColdStart_IsNoop(t *testing.T) {
+	repo := newFakeRepo() // zero-value state: LastProcessedHash == ""
+	src := &fakeEventSource{head: 0}
+	w := newWorker(src, repo)
+
+	if err := w.Poll(t.Context()); err != nil {
+		t.Fatalf("poll: %v", err)
+	}
+	// must not panic or attempt a delete on an uninitialized checkpoint
+}
+
+func TestWorker_ChecksInCanonicalHash_NotLastLogHash(t *testing.T) {
+	repo := newFakeRepo()
+	src := &fakeEventSource{
+		head: 5,
+		logs: map[uint64][]domain.IssuedLog{
+			1: {sampleLog("1", 1)}, // this log's own BlockHash field is "0xaabbcc" (see sampleLog)
+		},
+		certs:       map[string]domain.OnchainCertificate{"1": sampleCert("1")},
+		blockHashes: map[uint64]string{5: "0xcanonical-head-5"},
+	}
+	w := newWorker(src, repo)
+
+	if err := w.Poll(t.Context()); err != nil {
+		t.Fatalf("poll: %v", err)
+	}
+	if repo.state.LastProcessedHash != "0xcanonical-head-5" {
+		t.Fatalf("state.LastProcessedHash = %q, want the canonical head hash, not the log's own block hash (0xaabbcc)", repo.state.LastProcessedHash)
 	}
 }
